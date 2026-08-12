@@ -1,4 +1,4 @@
-name: 🀫 NuGet Cache (from v2rayN-SIG)
+name: 🀫 NuGet Cache (from source)
 on:
   workflow_dispatch:
     inputs:
@@ -6,6 +6,10 @@ on:
         description: '源码版本号 (release tag) 或 master'
         required: true
         default: 'master'
+      nuget_cache_version:
+        description: '本次生成的 nuget-cache release 版本号 (tag)'
+        required: true
+        default: 'nuget-cache'
 
 jobs:
   build-cache:
@@ -40,10 +44,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="nuget-cache-${{ inputs.source_ref }}"
-          gh release delete "$TAG" --repo ${{ github.repository }} --yes || true
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git --delete "$TAG" || true
-          gh release create "$TAG" nuget-cache.tar.gz \
+          gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
+            --delete "${{ inputs.nuget_cache_version }}" || true
+          gh release create "${{ inputs.nuget_cache_version }}" \
+            nuget-cache.tar.gz \
             --repo ${{ github.repository }} \
-            --title "NuGet Cache for v2rayN-SIG@${{ inputs.source_ref }}" \
-            --notes "根据 autorepobot/v2rayN-SIG@${{ inputs.source_ref }} restore 生成的 NuGet 缓存"
+            --title "NuGet Cache (source: ${{ inputs.source_ref }})" \
+            --notes "源码版本: ${{ inputs.source_ref }} / 缓存版本: ${{ inputs.nuget_cache_version }}"
