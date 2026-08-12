@@ -14,16 +14,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: write
     steps:
-      - name: Checkout source at specified ref
-        uses: actions/checkout@v7
-        with:
-          repository: autorepobot/v2rayN-SIG
-          ref: ${{ inputs.source_ref }}
-          submodules: recursive
-          token: ${{ secrets.PAT_TOKEN }}
+      - name: Clone source at specified ref
+        run: |
+          git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
+            https://github.com/autorepobot/v2rayN-SIG.git source
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
@@ -31,26 +26,19 @@ jobs:
           dotnet-version: '10.0.1xx'
 
       - name: Download NuGet cache from release
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          gh release download "${{ inputs.nuget_cache_version }}" \
-            --repo autorepobot/v2rayN-SIG \
-            --pattern "nuget-cache.tar.gz" \
-            --output nuget-cache.tar.gz
-          mkdir -p nuget-cache
-          tar -xzf nuget-cache.tar.gz -C nuget-cache --strip-components=1
+          mkdir -p ~/.nuget/packages
+          curl -L -o nuget-cache.tar.gz \
+            "https://github.com/autorepobot/v2rayN-SIG/releases/download/${{ inputs.nuget_cache_version }}/nuget-cache.tar.gz"
+          tar -xzf nuget-cache.tar.gz -C ~/.nuget/packages --strip-components=1
 
       - name: Restore using cached packages (offline)
         run: |
-          dotnet restore v2rayN/v2rayN.sln \
-            --packages ./nuget-cache \
-            --source ./nuget-cache \
-            -p:EnableWindowsTargeting=true
+          dotnet restore source/v2rayN/v2rayN.sln -p:EnableWindowsTargeting=true
 
       - name: Build / publish
         run: |
-          dotnet publish v2rayN/v2rayN.sln \
+          dotnet publish source/v2rayN/v2rayN.sln \
             -c Release \
             --no-restore \
             -p:EnableWindowsTargeting=true \
@@ -63,11 +51,12 @@ jobs:
 
       - name: Create Release
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="build-${{ inputs.source_ref }}-$(date +%Y%m%d%H%M%S)"
           gh release create "$TAG" \
             v2rayN-${{ inputs.source_ref }}.zip \
             --repo ${{ github.repository }} \
             --title "Build from ${{ inputs.source_ref }} (nuget-cache: ${{ inputs.nuget_cache_version }})" \
-            --notes "源码版本: ${{ inputs.source_ref }}\nNuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
+            --notes "源码版本: ${{ inputs.source_ref }}
+NuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
