@@ -1,4 +1,4 @@
-name: 🛠 Build from Source & NuGet Cache
+name: 🀫 NuGet Cache (from v2rayN-SIG)
 on:
   workflow_dispatch:
     inputs:
@@ -6,14 +6,12 @@ on:
         description: '源码版本号 (release tag) 或 master'
         required: true
         default: 'master'
-      nuget_cache_version:
-        description: 'nuget-cache release 版本号 (tag)'
-        required: true
-        default: 'nuget-cache'
 
 jobs:
-  build:
+  build-cache:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
     steps:
       - name: Clone source at specified ref
         run: |
@@ -25,37 +23,27 @@ jobs:
         with:
           dotnet-version: '10.0.1xx'
 
-      - name: Download NuGet cache from release
+      - name: Restore NuGet packages
         run: |
-          mkdir -p ~/.nuget/packages
-          curl -L -o nuget-cache.tar.gz \
-            "https://github.com/autorepobot/v2rayN-SIG/releases/download/${{ inputs.nuget_cache_version }}/nuget-cache.tar.gz"
-          tar -xzf nuget-cache.tar.gz -C ~/.nuget/packages --strip-components=1
+          dotnet restore source/v2rayN/v2rayN.sln --packages ./nuget-cache -p:EnableWindowsTargeting=true
 
-      - name: Restore using cached packages (offline)
+      - name: Optimize cache size (remove temp files)
         run: |
-          dotnet restore source/v2rayN/v2rayN.sln -p:EnableWindowsTargeting=true
+          find ./nuget-cache -name "*.lock" -delete
+          find ./nuget-cache -name "*.tmp" -delete
 
-      - name: Build / publish
+      - name: Compress NuGet cache
         run: |
-          dotnet publish source/v2rayN/v2rayN.sln \
-            -c Release \
-            --no-restore \
-            -p:EnableWindowsTargeting=true \
-            -o ./publish
+          tar -czf nuget-cache.tar.gz nuget-cache
 
-      - name: Package build output
-        run: |
-          cd publish
-          zip -r ../v2rayN-${{ inputs.source_ref }}.zip .
-
-      - name: Create Release
+      - name: Create Release with cache
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="build-${{ inputs.source_ref }}-$(date +%Y%m%d%H%M%S)"
-          gh release create "$TAG" \
-            v2rayN-${{ inputs.source_ref }}.zip \
+          TAG="nuget-cache-${{ inputs.source_ref }}"
+          gh release delete "$TAG" --repo ${{ github.repository }} --yes || true
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git --delete "$TAG" || true
+          gh release create "$TAG" nuget-cache.tar.gz \
             --repo ${{ github.repository }} \
-            --title "Build from ${{ inputs.source_ref }} (nuget-cache: ${{ inputs.nuget_cache_version }})" \
-            --notes "源码版本: ${{ inputs.source_ref }} / NuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
+            --title "NuGet Cache for v2rayN-SIG@${{ inputs.source_ref }}" \
+            --notes "根据 autorepobot/v2rayN-SIG@${{ inputs.source_ref }} restore 生成的 NuGet 缓存"
