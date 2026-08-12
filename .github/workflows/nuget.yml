@@ -27,9 +27,17 @@ jobs:
         with:
           dotnet-version: '10.0.1xx'
 
-      - name: Restore NuGet packages
+      - name: Restore NuGet packages for all target RIDs
         run: |
-          dotnet restore source/v2rayN/v2rayN.sln --packages ./nuget-cache -p:EnableWindowsTargeting=true
+          RIDS="linux-x64 linux-arm64 linux-riscv64 linux-loongarch64"
+          for RID in $RIDS; do
+            echo "==> Restoring for RID: $RID"
+            dotnet restore source/v2rayN/v2rayN.sln \
+              --packages ./nuget-cache \
+              -r "$RID" \
+              -p:EnableWindowsTargeting=true \
+              --ignore-failed-sources || echo "警告: $RID restore 部分失败，继续下一个"
+          done
 
       - name: Optimize cache size (remove temp files)
         run: |
