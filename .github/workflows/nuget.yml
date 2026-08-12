@@ -9,7 +9,7 @@ on:
       nuget_cache_version:
         description: '本次生成的 nuget-cache release 版本号 (tag)'
         required: true
-        default: 'nuget-cache'
+        default: ''
 
 jobs:
   build-cache:
