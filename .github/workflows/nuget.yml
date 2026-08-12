@@ -58,5 +58,4 @@ jobs:
             v2rayN-${{ inputs.source_ref }}.zip \
             --repo ${{ github.repository }} \
             --title "Build from ${{ inputs.source_ref }} (nuget-cache: ${{ inputs.nuget_cache_version }})" \
-            --notes "源码版本: ${{ inputs.source_ref }}
-NuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
+            --notes "源码版本: ${{ inputs.source_ref }} / NuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
