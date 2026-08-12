@@ -50,5 +50,5 @@ jobs:
           gh release create "${{ inputs.nuget_cache_version }}" \
             nuget-cache.tar.gz \
             --repo ${{ github.repository }} \
-            --title "NuGet Cache (source: ${{ inputs.source_ref }})" \
+            --title "${{ inputs.nuget_cache_version }}" \
             --notes "源码版本: ${{ inputs.source_ref }} / 缓存版本: ${{ inputs.nuget_cache_version }}"
