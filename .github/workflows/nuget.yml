@@ -1,0 +1,73 @@
+name: 🛠 Build from Source & NuGet Cache
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: '源码版本号 (release tag) 或 master'
+        required: true
+        default: 'master'
+      nuget_cache_version:
+        description: 'nuget-cache release 版本号 (tag)'
+        required: true
+        default: 'nuget-cache'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source at specified ref
+        uses: actions/checkout@v7
+        with:
+          repository: autorepobot/v2rayN-SIG
+          ref: ${{ inputs.source_ref }}
+          submodules: recursive
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.1xx'
+
+      - name: Download NuGet cache from release
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh release download "${{ inputs.nuget_cache_version }}" \
+            --repo autorepobot/v2rayN-SIG \
+            --pattern "nuget-cache.tar.gz" \
+            --output nuget-cache.tar.gz
+          mkdir -p nuget-cache
+          tar -xzf nuget-cache.tar.gz -C nuget-cache --strip-components=1
+
+      - name: Restore using cached packages (offline)
+        run: |
+          dotnet restore v2rayN/v2rayN.sln \
+            --packages ./nuget-cache \
+            --source ./nuget-cache \
+            -p:EnableWindowsTargeting=true
+
+      - name: Build / publish
+        run: |
+          dotnet publish v2rayN/v2rayN.sln \
+            -c Release \
+            --no-restore \
+            -p:EnableWindowsTargeting=true \
+            -o ./publish
+
+      - name: Package build output
+        run: |
+          cd publish
+          zip -r ../v2rayN-${{ inputs.source_ref }}.zip .
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          TAG="build-${{ inputs.source_ref }}-$(date +%Y%m%d%H%M%S)"
+          gh release create "$TAG" \
+            v2rayN-${{ inputs.source_ref }}.zip \
+            --repo ${{ github.repository }} \
+            --title "Build from ${{ inputs.source_ref }} (nuget-cache: ${{ inputs.nuget_cache_version }})" \
+            --notes "源码版本: ${{ inputs.source_ref }}\nNuGet 缓存版本: ${{ inputs.nuget_cache_version }}"
