@@ -27,6 +27,7 @@ jobs:
       - name: Add Loongson NuGet source
         run: |
           dotnet nuget add source -n lnuget.loongnix.cn --protocol-version 3 \
+            --allow-insecure-connections \
             https://lnuget.loongnix.cn/v3/index.json
       - name: Restore NuGet packages for all target RIDs
         run: |
@@ -42,7 +43,6 @@ jobs:
       - name: Download extra runtime packs (riscv64)
         run: |
           mkdir -p extra-packs
-
           # RISC-V64
           curl -fL -o riscv64-sdk.tar.gz \
             "https://github.com/xujiegb/dotnet-riscv/releases/download/10.0.111/dotnet-sdk-10.0.111-linux-riscv64.tar.gz"
