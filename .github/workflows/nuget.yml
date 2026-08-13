@@ -199,12 +199,6 @@ jobs:
             --protocol-version 3 \
             --allow-insecure-connections || true
 
-          "/tmp/sdks/sdk-loong/dotnet" nuget add source \
-            "http://lnuget.loongnix.cn/v3/index.json" \
-            -n lnuget.loongnix.cn-http \
-            --protocol-version 3 \
-            --allow-insecure-connections || true
-
           echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from Loongson feed..."
           "/tmp/sdks/sdk-loong/dotnet" restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
