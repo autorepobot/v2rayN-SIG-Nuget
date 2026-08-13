@@ -80,7 +80,7 @@ jobs:
           curl -fL -o riscv64-sdk.tar.gz \
             "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
           mkdir -p /tmp/riscv64-packs
-          tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-packs packs
+          tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-packs ./packs
           rm -f riscv64-sdk.tar.gz
 
           # 装一个跟 riscv64 包版本号完全一致、且能在本机（ARM64）实际执行的宿主 SDK
@@ -109,7 +109,7 @@ jobs:
           curl -fL -o loongarch64-sdk.tar.gz \
             "https://github.com/loongson/dotnet/releases/download/v${LOONG_VER}-loongarch64/dotnet-sdk-${LOONG_VER}-linux-loongarch64.tar.gz"
           mkdir -p /tmp/loongarch64-packs
-          tar -xzf loongarch64-sdk.tar.gz -C /tmp/loongarch64-packs packs
+          tar -xzf loongarch64-sdk.tar.gz -C /tmp/loongarch64-packs ./packs
           rm -f loongarch64-sdk.tar.gz
 
           mkdir -p "/tmp/sdks/host-loong"
