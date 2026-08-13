@@ -35,18 +35,47 @@ jobs:
         run: |
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
-      - name: Discover latest two 10.0.1xx SDK patch versions
+            - name: Discover latest two 10.0.1xx SDK patch versions
         run: |
           curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
           chmod +x dotnet-install.sh
 
-          # 拉取 10.0.1xx channel 的官方版本列表，取最新两个 GA/patch 版本
-          RELEASES_JSON=$(curl -fsSL https://raw.githubusercontent.com/dotnet/core/main/release-notes/10.0/releases.json)
-          VERSIONS=$(echo "$RELEASES_JSON" | jq -r '.releases[].sdk.version' | grep -E '^10\.0\.1[0-9][0-9]$' | sort -Vr | uniq | head -2)
+          get_resolved_version() {
+            ./dotnet-install.sh --channel "$1" --dry-run 2>&1 \
+              | grep -oP '(?<=Version: )[0-9]+\.[0-9]+\.[0-9]+' | head -1
+          }
 
-          echo "取得的最新两个 SDK 版本:"
-          echo "$VERSIONS"
-          echo "$VERSIONS" > /tmp/sdk-versions.txt
+          LATEST=$(get_resolved_version "10.0.1xx")
+          if [ -z "$LATEST" ]; then
+            echo "无法解析最新 10.0.1xx 版本" >&2
+            exit 1
+          fi
+          echo "最新版本: $LATEST"
+
+          MAJOR_MINOR=$(echo "$LATEST" | cut -d. -f1,2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+
+          PREV=""
+          TRY_PATCH=$((PATCH - 1))
+          while [ "$TRY_PATCH" -gt 0 ]; do
+            CANDIDATE="$MAJOR_MINOR.$TRY_PATCH"
+            RESOLVED=$(get_resolved_version "$CANDIDATE")
+            if [ -n "$RESOLVED" ]; then
+              PREV="$RESOLVED"
+              break
+            fi
+            TRY_PATCH=$((TRY_PATCH - 1))
+          done
+
+          if [ -z "$PREV" ]; then
+            echo "未能找到上一个可用版本，仅使用最新版本" >&2
+            echo "$LATEST" > /tmp/sdk-versions.txt
+          else
+            printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
+          fi
+
+          echo "取得的 SDK 版本:"
+          cat /tmp/sdk-versions.txt
       - name: Install both SDK versions
         run: |
           mkdir -p /tmp/sdks
