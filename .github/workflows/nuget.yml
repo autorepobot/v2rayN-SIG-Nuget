@@ -75,7 +75,7 @@ jobs:
           done < /tmp/sdk-versions.txt
       - name: Restore riscv64 / loongarch64 using their own SDK's native version
         run: |
-          # RISC-V64：用它自带的 SDK 版本，只 restore 一次
+          # RISC-V64：先提取 SDK 自带的 packs，再用它自己的 dotnet 还原
           curl -fL -o riscv64-sdk.tar.gz \
             "https://github.com/xujiegb/dotnet-riscv/releases/download/10.0.111/dotnet-sdk-10.0.111-linux-riscv64.tar.gz"
           mkdir -p /tmp/sdks/riscv64
@@ -88,7 +88,15 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-riscv64 restore 部分失败，继续下一个"
 
-          # LoongArch64：用它自带的 SDK 版本，只 restore 一次
+          # 把 riscv64 SDK 自带的 packs 一并写入 nuget-cache
+          for dir in /tmp/sdks/riscv64/packs/*/; do
+            name=$(basename "$dir")
+            lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+            mkdir -p "./nuget-cache/$lower_name"
+            cp -r "$dir"* "./nuget-cache/$lower_name/"
+          done
+
+          # LoongArch64：先提取 SDK 自带的 packs，再用它自己的 dotnet 还原
           curl -fL -o loongarch64-sdk.tar.gz \
             "https://github.com/loongson/dotnet/releases/download/v10.0.110-loongarch64/dotnet-sdk-10.0.110-linux-loongarch64.tar.gz"
           mkdir -p /tmp/sdks/loongarch64
@@ -100,6 +108,16 @@ jobs:
             -r linux-loongarch64 \
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败，继续下一个"
+
+          # 把 loongarch64 SDK 自带的 packs 一并写入 nuget-cache
+          for dir in /tmp/sdks/loongarch64/packs/*/; do
+            name=$(basename "$dir")
+            lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+            mkdir -p "./nuget-cache/$lower_name"
+            cp -r "$dir"* "./nuget-cache/$lower_name/"
+          done
+
+          rm -rf /tmp/sdks/riscv64 /tmp/sdks/loongarch64
       - name: Optimize cache size (remove temp files)
         run: |
           find ./nuget-cache -name "*.lock" -delete
