@@ -138,26 +138,36 @@ jobs:
           done < /tmp/sdk-versions.txt
 
       # ---------------------------------------------------------
-      # RISC-V64：使用自定义 SDK Packs 解绑软链接打包还原
+      # RISC-V64：解压完整 SDK 并解绑软链接，生成真实体包
       # ---------------------------------------------------------
       - name: Restore riscv64 using custom SDK packs
         run: |
-          mkdir -p /tmp/local-feed
+          mkdir -p /tmp/local-feed /tmp/sdks/riscv64-sdk
 
           RISCV_VER="10.0.111"
           curl -fL -o riscv64-sdk.tar.gz "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
-          mkdir -p /tmp/sdks/riscv64-packs
-          tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs ./packs 2>/dev/null || tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs
+
+          # 1. 重点：解压完整 SDK（不加 ./packs 限制），保留 shared 目录供软链接解析
+          tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-sdk
           rm -f riscv64-sdk.tar.gz
 
-          find /tmp/sdks/riscv64-packs -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
+          # 2. 遍历打包
+          find /tmp/sdks/riscv64-sdk/packs -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
             VER=$(basename "$pack_ver_dir")
             PACK_DIR=$(dirname "$pack_ver_dir")
             PKG_ID=$(basename "$PACK_DIR")
             if [[ ! "$VER" =~ ^[0-9] ]]; then continue; fi
 
+            # 过滤：如果包名包含 linux- 却不是 riscv64（比如 loongarch64），直接跳过
+            if [[ "$PKG_ID" =~ linux- && ! "$PKG_ID" =~ riscv64 ]]; then
+              echo "跳过非 riscv64 包: $PKG_ID"
+              continue
+            fi
+
             BUILD_DIR=$(mktemp -d)
-            cp -rL "$pack_ver_dir"/* "$BUILD_DIR/" 2>/dev/null || cp -r "$pack_ver_dir"/* "$BUILD_DIR/"
+
+            # 3. 重点：通过 cp -rL 将软链接指向的 shared/ 实体二进制文件彻底“解绑/复制”进来
+            cp -rL "$pack_ver_dir"/* "$BUILD_DIR/"
 
             echo '<?xml version="1.0" encoding="utf-8"?>
             <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
@@ -165,13 +175,14 @@ jobs:
                 <id>'"$PKG_ID"'</id>
                 <version>'"$VER"'</version>
                 <authors>Microsoft</authors>
-                <description>Repackaged RISC-V packs</description>
+                <description>Repackaged RISC-V packs with real binaries</description>
               </metadata>
             </package>' > "$BUILD_DIR/$PKG_ID.nuspec"
 
             LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
             (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${LOWER_ID}.${VER}.nupkg" .)
             rm -rf "$BUILD_DIR"
+            echo "打包完成实体包: ${LOWER_ID}.${VER}.nupkg"
           done
 
           echo "==> Restoring linux-riscv64..."
