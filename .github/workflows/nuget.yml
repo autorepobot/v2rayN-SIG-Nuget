@@ -217,7 +217,7 @@ jobs:
   # =========================================================
   merge-and-release:
     needs: [build-x64-runner, build-arm64-runner]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
     steps:
