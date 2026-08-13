@@ -147,17 +147,15 @@ jobs:
             BUILD_DIR=$(mktemp -d)
             cp -rL "$pack_ver_dir"/* "$BUILD_DIR/" 2>/dev/null || cp -r "$pack_ver_dir"/* "$BUILD_DIR/"
 
-            cat <<EOF | sed 's/^[ \t]*//' > "$BUILD_DIR/$PKG_ID.nuspec"
-            <?xml version="1.0" encoding="utf-8"?>
+            echo '<?xml version="1.0" encoding="utf-8"?>
             <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
               <metadata>
-                <id>$PKG_ID</id>
-                <version>$VER</version>
+                <id>'"$PKG_ID"'</id>
+                <version>'"$VER"'</version>
                 <authors>Microsoft</authors>
                 <description>Repackaged RISC-V packs</description>
               </metadata>
-            </package>
-            EOF
+            </package>' > "$BUILD_DIR/$PKG_ID.nuspec"
 
             LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
             (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${LOWER_ID}.${VER}.nupkg" .)
