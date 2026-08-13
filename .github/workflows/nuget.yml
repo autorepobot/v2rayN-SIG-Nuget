@@ -199,7 +199,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Restore loongarch64 using Loongson NuGet source
         run: |
-          LOONG_VER="10.0.110"
+          LOONG_VER="10.0.111"
 
           mkdir -p "/tmp/sdks/sdk-loong"
           ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/sdk-loong"
