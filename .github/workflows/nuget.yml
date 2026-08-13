@@ -35,7 +35,7 @@ jobs:
         run: |
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
-            - name: Discover latest two 10.0.1xx SDK patch versions
+      - name: Discover latest two 10.0.1xx SDK patch versions
         run: |
           curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
           chmod +x dotnet-install.sh
