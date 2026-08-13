@@ -1,4 +1,5 @@
 name: 🀫 NuGet Cache (from source)
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,31 +11,29 @@ on:
         description: '本次生成的 nuget-cache release 版本号 (tag)'
         required: true
         default: ''
+
 jobs:
-  build-cache:
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: write
+  # =========================================================
+  # Job 1: 在 x64 Runner 上抓取 arm64 & x64 的官方 NuGet 包
+  # =========================================================
+  build-x64-runner:
+    runs-on: ubuntu-24.04
     steps:
       - name: Purge SDKs
         shell: pwsh
         run: |
-          echo "Before:"
-          dotnet --list-sdks
-
           dotnet --list-sdks | % {
             $_ -match '^\S+\s+\[(.+)\]$' > $null
             $d = Join-Path $Matches[1] $_.Split()[0]
-            Write-Host "Removing $d"
             if ($IsWindows) { rm $d -r -fo } else { sudo rm -rf "$d" }
           }
-
-          echo "After:"
           dotnet --list-sdks 2>$null; $LASTEXITCODE=0
-      - name: Clone source at specified ref
+
+      - name: Clone source
         run: |
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
+
       - name: Install latest two 10.0.1xx SDK patch versions
         run: |
           curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
@@ -43,121 +42,197 @@ jobs:
           mkdir -p /tmp/sdks/sdk1
           ./dotnet-install.sh --channel "10.0.1xx" --install-dir /tmp/sdks/sdk1
           LATEST=$(/tmp/sdks/sdk1/dotnet --version)
-          echo "最新版本: $LATEST"
 
           MAJOR_MINOR=$(echo "$LATEST" | cut -d. -f1,2)
           PATCH=$(echo "$LATEST" | cut -d. -f3)
           PREV="$MAJOR_MINOR.$((PATCH - 1))"
-          echo "上一个版本: $PREV"
 
           mkdir -p /tmp/sdks/sdk2
           ./dotnet-install.sh --version "$PREV" --install-dir /tmp/sdks/sdk2
 
           printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
-          echo "取得的 SDK 版本:"
-          cat /tmp/sdk-versions.txt
-      - name: Restore for each SDK version (linux-x64 / linux-arm64 only)
+
+      - name: Restore linux-arm64 and linux-x64
         run: |
-          RIDS="linux-x64 linux-arm64"
+          RIDS="linux-arm64 linux-x64"
           i=0
           while read -r VER; do
             i=$((i+1))
             SDK_DIR="/tmp/sdks/sdk$i"
-            echo "########## 使用 SDK $VER ($SDK_DIR) ##########"
             for RID in $RIDS; do
-              echo "==> [$VER] Restoring for RID: $RID"
+              echo "==> [x64 Runner] Restoring $RID with SDK $VER"
               "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
-                --packages ./nuget-cache \
+                --packages ./nuget-cache-x64 \
                 -r "$RID" \
                 -p:EnableWindowsTargeting=true \
-                --ignore-failed-sources || echo "警告: [$VER] $RID restore 部分失败，继续下一个"
+                --ignore-failed-sources || true
             done
           done < /tmp/sdk-versions.txt
 
-      - name: Sync host SDK local packs (arm64) to nuget-cache
+      - name: Upload x64 runner cache artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-cache-x64-runner
+          path: ./nuget-cache-x64/
+
+  # =========================================================
+  # Job 2: 在 ARM64 Runner 上恢复 x64 及处理 riscv64 / loongarch64
+  # =========================================================
+  build-arm64-runner:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Purge SDKs
+        shell: pwsh
         run: |
-          for sdk in /tmp/sdks/sdk1 /tmp/sdks/sdk2; do
-            if [ -d "$sdk/packs" ]; then
-              for dir in "$sdk/packs"/*/; do
-                name=$(basename "$dir")
-                lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
-                mkdir -p "./nuget-cache/$lower_name"
-                cp -rn "$dir"* "./nuget-cache/$lower_name/" 2>/dev/null || true
-              done
-            fi
-          done
-      - name: Restore riscv64 / loongarch64 using their own SDK's version
+          dotnet --list-sdks | % {
+            $_ -match '^\S+\s+\[(.+)\]$' > $null
+            $d = Join-Path $Matches[1] $_.Split()[0]
+            if ($IsWindows) { rm $d -r -fo } else { sudo rm -rf "$d" }
+          }
+          dotnet --list-sdks 2>$null; $LASTEXITCODE=0
+
+      - name: Clone source
         run: |
-          # RISC-V64：包名里的版本号是 10.0.111
+          git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
+            https://github.com/autorepobot/v2rayN-SIG.git source
+
+      - name: Install latest two 10.0.1xx SDK patch versions
+        run: |
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+          chmod +x dotnet-install.sh
+
+          mkdir -p /tmp/sdks/sdk1
+          ./dotnet-install.sh --channel "10.0.1xx" --install-dir /tmp/sdks/sdk1
+          LATEST=$(/tmp/sdks/sdk1/dotnet --version)
+
+          MAJOR_MINOR=$(echo "$LATEST" | cut -d. -f1,2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+          PREV="$MAJOR_MINOR.$((PATCH - 1))"
+
+          mkdir -p /tmp/sdks/sdk2
+          ./dotnet-install.sh --version "$PREV" --install-dir /tmp/sdks/sdk2
+
+          printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
+
+      - name: Restore linux-x64
+        run: |
+          i=0
+          while read -r VER; do
+            i=$((i+1))
+            SDK_DIR="/tmp/sdks/sdk$i"
+            echo "==> [ARM64 Runner] Restoring linux-x64 with SDK $VER"
+            "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
+              --packages ./nuget-cache-arm \
+              -r linux-x64 \
+              -p:EnableWindowsTargeting=true \
+              --ignore-failed-sources || true
+          done < /tmp/sdk-versions.txt
+
+      - name: Restore riscv64 & loongarch64 using custom SDK packs
+        run: |
+          mkdir -p /tmp/local-feed
+
+          # 1. 下载 RISC-V64 SDK 并抽取 packs
           RISCV_VER="10.0.111"
-          curl -fL -o riscv64-sdk.tar.gz \
-            "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
-          mkdir -p /tmp/riscv64-packs
-          tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-packs ./packs
+          curl -fL -o riscv64-sdk.tar.gz "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
+          mkdir -p /tmp/sdks/riscv64-packs
+          tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs ./packs 2>/dev/null || tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs
           rm -f riscv64-sdk.tar.gz
 
-          # 装一个跟 riscv64 包版本号完全一致、且能在本机（ARM64）实际执行的宿主 SDK
-          mkdir -p "/tmp/sdks/host-riscv"
-          ./dotnet-install.sh --version "$RISCV_VER" --install-dir "/tmp/sdks/host-riscv"
-          mkdir -p "/tmp/sdks/host-riscv/packs"
-          cp -r /tmp/riscv64-packs/packs/* "/tmp/sdks/host-riscv/packs/"
-
-          echo "==> Restoring for RID: linux-riscv64 (host SDK $RISCV_VER)"
-          /tmp/sdks/host-riscv/dotnet restore source/v2rayN/v2rayN.sln \
-            --packages ./nuget-cache \
-            -r linux-riscv64 \
-            -p:EnableWindowsTargeting=true \
-            --ignore-failed-sources || echo "警告: linux-riscv64 restore 部分失败，继续下一个"
-
-          for dir in /tmp/riscv64-packs/packs/*/; do
-            name=$(basename "$dir")
-            lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
-            mkdir -p "./nuget-cache/$lower_name"
-            cp -r "$dir"* "./nuget-cache/$lower_name/"
-          done
-          rm -rf /tmp/riscv64-packs /tmp/sdks/host-riscv
-
-          # LoongArch64：包名里的版本号是 10.0.110
+          # 2. 下载 LoongArch64 SDK 并抽取 packs
           LOONG_VER="10.0.110"
-          curl -fL -o loongarch64-sdk.tar.gz \
-            "https://github.com/loongson/dotnet/releases/download/v${LOONG_VER}-loongarch64/dotnet-sdk-${LOONG_VER}-linux-loongarch64.tar.gz"
-          mkdir -p /tmp/loongarch64-packs
-          tar -xzf loongarch64-sdk.tar.gz -C /tmp/loongarch64-packs ./packs
+          curl -fL -o loongarch64-sdk.tar.gz "https://github.com/loongson/dotnet/releases/download/v${LOONG_VER}-loongarch64/dotnet-sdk-${LOONG_VER}-linux-loongarch64.tar.gz"
+          mkdir -p /tmp/sdks/loong-packs
+          tar -xzf loongarch64-sdk.tar.gz -C /tmp/sdks/loong-packs ./packs 2>/dev/null || tar -xzf loongarch64-sdk.tar.gz -C /tmp/sdks/loong-packs
           rm -f loongarch64-sdk.tar.gz
 
-          mkdir -p "/tmp/sdks/host-loong"
-          ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/host-loong"
-          mkdir -p "/tmp/sdks/host-loong/packs"
-          cp -r /tmp/loongarch64-packs/packs/* "/tmp/sdks/host-loong/packs/"
+          # 3. 将 riscv64 和 loongarch64 的 packs 实体化打包为 .nupkg
+          find /tmp/sdks -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
+            VER=$(basename "$pack_ver_dir")
+            PACK_DIR=$(dirname "$pack_ver_dir")
+            PKG_ID=$(basename "$PACK_DIR")
+            if [[ ! "$VER" =~ ^[0-9] ]]; then continue; fi
 
-          echo "==> Restoring for RID: linux-loongarch64 (host SDK $LOONG_VER)"
-          /tmp/sdks/host-loong/dotnet restore source/v2rayN/v2rayN.sln \
-            --packages ./nuget-cache \
-            -r linux-loongarch64 \
-            -p:EnableWindowsTargeting=true \
-            --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败，继续下一个"
+            BUILD_DIR=$(mktemp -d)
+            cp -rL "$pack_ver_dir"/* "$BUILD_DIR/" 2>/dev/null || cp -r "$pack_ver_dir"/* "$BUILD_DIR/"
 
-          for dir in /tmp/loongarch64-packs/packs/*/; do
-            name=$(basename "$dir")
-            lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
-            mkdir -p "./nuget-cache/$lower_name"
-            cp -r "$dir"* "./nuget-cache/$lower_name/"
+            cat <<EOF > "$BUILD_DIR/$PKG_ID.nuspec"
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>$PKG_ID</id>
+    <version>$VER</version>
+    <authors>Microsoft</authors>
+    <description>Repackaged packs</description>
+  </metadata>
+</package>
+EOF
+            LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
+            (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${LOWER_ID}.${VER}.nupkg" .)
+            rm -rf "$BUILD_DIR"
           done
-          rm -rf /tmp/loongarch64-packs /tmp/sdks/host-loong
-      - name: Optimize cache size (remove temp files)
+
+          # 4. 执行 restore 存入 nuget-cache-arm
+          for RID in linux-riscv64 linux-loongarch64; do
+            echo "==> Restoring $RID using local-feed..."
+            /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
+              --packages ./nuget-cache-arm \
+              --source /tmp/local-feed \
+              --source https://api.nuget.org/v3/index.json \
+              -r "$RID" \
+              -p:EnableWindowsTargeting=true \
+              --ignore-failed-sources || true
+          done
+
+      - name: Upload ARM64 runner cache artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-cache-arm64-runner
+          path: ./nuget-cache-arm/
+
+  # =========================================================
+  # Job 3: 合并两个 Runner 的缓存，去重并发布 Release
+  # =========================================================
+  merge-and-release:
+    needs: [build-x64-runner, build-arm64-runner]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Merge caches & deduplicate
         run: |
+          mkdir -p ./nuget-cache
+
+          echo "正在合并 x64-runner 产物..."
+          cp -rn ./artifacts/nuget-cache-x64-runner/* ./nuget-cache/ 2>/dev/null || true
+
+          echo "正在合并 arm64-runner 产物 (自动去重，不覆盖已有文件)..."
+          cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
+
+          # 清理临时/锁定文件
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
+
+          echo "合并完成！NuGet 顶级包目录数量:"
+          ls -1 ./nuget-cache | wc -l
+
       - name: Compress NuGet cache
         run: |
           tar -czf nuget-cache.tar.gz nuget-cache
+
       - name: Create Release with cache
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .git \
             --delete "${{ inputs.nuget_cache_version }}" || true
+
           gh release create "${{ inputs.nuget_cache_version }}" \
             nuget-cache.tar.gz \
             --repo ${{ github.repository }} \
