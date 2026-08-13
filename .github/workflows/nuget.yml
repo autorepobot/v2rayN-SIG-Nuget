@@ -73,7 +73,7 @@ jobs:
           done < /tmp/sdk-versions.txt
 
       - name: Upload x64 runner cache artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nuget-cache-x64-runner
           path: ./nuget-cache-x64/
@@ -207,7 +207,7 @@ jobs:
             --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败"
 
       - name: Upload ARM64 runner cache artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nuget-cache-arm64-runner
           path: ./nuget-cache-arm/
@@ -222,7 +222,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: ./artifacts
 
