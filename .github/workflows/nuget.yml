@@ -42,11 +42,13 @@ jobs:
 
           get_resolved_version() {
             ./dotnet-install.sh --channel "$1" --dry-run 2>&1 \
-              | grep -oP '(?<=Version: )[0-9]+\.[0-9]+\.[0-9]+' | head -1
+              | grep -oP '/Sdk/\K[0-9]+\.[0-9]+\.[0-9]+(?=/)' | head -1
           }
 
           LATEST=$(get_resolved_version "10.0.1xx")
           if [ -z "$LATEST" ]; then
+            echo "===== 调试：dry-run 完整输出 =====" >&2
+            ./dotnet-install.sh --channel "10.0.1xx" --dry-run 2>&1 >&2
             echo "无法解析最新 10.0.1xx 版本" >&2
             exit 1
           fi
