@@ -73,6 +73,19 @@ jobs:
                 --ignore-failed-sources || echo "警告: [$VER] $RID restore 部分失败，继续下一个"
             done
           done < /tmp/sdk-versions.txt
+
+      - name: Sync host SDK local packs (arm64) to nuget-cache
+        run: |
+          for sdk in /tmp/sdks/sdk1 /tmp/sdks/sdk2; do
+            if [ -d "$sdk/packs" ]; then
+              for dir in "$sdk/packs"/*/; do
+                name=$(basename "$dir")
+                lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+                mkdir -p "./nuget-cache/$lower_name"
+                cp -rn "$dir"* "./nuget-cache/$lower_name/" 2>/dev/null || true
+              done
+            fi
+          done
       - name: Restore riscv64 / loongarch64 using their own SDK's version
         run: |
           # RISC-V64：包名里的版本号是 10.0.111
