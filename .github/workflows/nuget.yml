@@ -39,23 +39,27 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.1xx'
-      - name: Add Loongson NuGet source
+      - name: Extract riscv64 and loongarch64 runtime packs before restore
         run: |
-          dotnet nuget add source -n lnuget.loongnix.cn --protocol-version 3 \
-            --allow-insecure-connections \
-            https://lnuget.loongnix.cn/v3/index.json
-      - name: Extract riscv64 runtime packs before restore
-        run: |
+          DOTNET_INSTALL_DIR=$(dirname "$(readlink -f "$(command -v dotnet)")")
+          echo "DOTNET_INSTALL_DIR=$DOTNET_INSTALL_DIR" >> "$GITHUB_ENV"
+          mkdir -p "$DOTNET_INSTALL_DIR/packs"
+
+          # RISC-V64
           curl -fL -o riscv64-sdk.tar.gz \
             "https://github.com/xujiegb/dotnet-riscv/releases/download/10.0.111/dotnet-sdk-10.0.111-linux-riscv64.tar.gz"
           mkdir -p /tmp/riscv64-sdk
           tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-sdk
           rm -f riscv64-sdk.tar.gz
-
-          DOTNET_INSTALL_DIR=$(dirname "$(readlink -f "$(command -v dotnet)")")
-          echo "DOTNET_INSTALL_DIR=$DOTNET_INSTALL_DIR" >> "$GITHUB_ENV"
-          mkdir -p "$DOTNET_INSTALL_DIR/packs"
           cp -r /tmp/riscv64-sdk/packs/* "$DOTNET_INSTALL_DIR/packs/"
+
+          # LoongArch64
+          curl -fL -o loongarch64-sdk.tar.gz \
+            "https://github.com/loongson/dotnet/releases/download/v10.0.110-loongarch64/dotnet-sdk-10.0.110-linux-loongarch64.tar.gz"
+          mkdir -p /tmp/loongarch64-sdk
+          tar -xzf loongarch64-sdk.tar.gz -C /tmp/loongarch64-sdk
+          rm -f loongarch64-sdk.tar.gz
+          cp -r /tmp/loongarch64-sdk/packs/* "$DOTNET_INSTALL_DIR/packs/"
       - name: Restore NuGet packages for all target RIDs
         run: |
           RIDS="linux-x64 linux-arm64 linux-riscv64 linux-loongarch64"
@@ -67,15 +71,17 @@ jobs:
               -p:EnableWindowsTargeting=true \
               --ignore-failed-sources || echo "警告: $RID restore 部分失败，继续下一个"
           done
-      - name: Merge riscv64 runtime packs into nuget-cache
+      - name: Merge riscv64 and loongarch64 runtime packs into nuget-cache
         run: |
-          for dir in /tmp/riscv64-sdk/packs/*/; do
-            name=$(basename "$dir")
-            lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
-            mkdir -p "./nuget-cache/$lower_name"
-            cp -r "$dir"* "./nuget-cache/$lower_name/"
+          for sdk_dir in /tmp/riscv64-sdk /tmp/loongarch64-sdk; do
+            for dir in "$sdk_dir"/packs/*/; do
+              name=$(basename "$dir")
+              lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+              mkdir -p "./nuget-cache/$lower_name"
+              cp -r "$dir"* "./nuget-cache/$lower_name/"
+            done
           done
-          rm -rf /tmp/riscv64-sdk
+          rm -rf /tmp/riscv64-sdk /tmp/loongarch64-sdk
       - name: Optimize cache size (remove temp files)
         run: |
           find ./nuget-cache -name "*.lock" -delete
