@@ -14,7 +14,7 @@ on:
 
 jobs:
   # =========================================================
-  # Job 1: 在 x64 Runner 上抓取 arm64 & x64 的官方 NuGet 包
+  # Job 1: 在 x64 Runner 上【仅】还原 linux-arm64
   # =========================================================
   build-x64-runner:
     runs-on: ubuntu-24.04
@@ -52,21 +52,18 @@ jobs:
 
           printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
 
-      - name: Restore linux-arm64 and linux-x64
+      - name: Restore linux-arm64 ONLY
         run: |
-          RIDS="linux-arm64 linux-x64"
           i=0
           while read -r VER; do
             i=$((i+1))
             SDK_DIR="/tmp/sdks/sdk$i"
-            for RID in $RIDS; do
-              echo "==> [x64 Runner] Restoring $RID with SDK $VER"
-              "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
-                --packages ./nuget-cache-x64 \
-                -r "$RID" \
-                -p:EnableWindowsTargeting=true \
-                --ignore-failed-sources || true
-            done
+            echo "==> [x64 Runner] Restoring linux-arm64 with SDK $VER"
+            "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
+              --packages ./nuget-cache-x64 \
+              -r linux-arm64 \
+              -p:EnableWindowsTargeting=true \
+              --ignore-failed-sources || true
           done < /tmp/sdk-versions.txt
 
       - name: Upload x64 runner cache artifact
@@ -76,7 +73,7 @@ jobs:
           path: ./nuget-cache-x64/
 
   # =========================================================
-  # Job 2: 在 ARM64 Runner 上处理 x64, riscv64 & loongarch64
+  # Job 2: 在 ARM64 Runner 上处理 linux-x64, riscv64 & loongarch64
   # =========================================================
   build-arm64-runner:
     runs-on: ubuntu-24.04-arm
@@ -129,7 +126,7 @@ jobs:
           done < /tmp/sdk-versions.txt
 
       # ---------------------------------------------------------
-      # RISC-V64：继续使用自定义 SDK Packs 解绑软链接打包还原
+      # RISC-V64：使用自定义 SDK Packs 解绑软链接打包还原
       # ---------------------------------------------------------
       - name: Restore riscv64 using custom SDK packs
         run: |
@@ -150,17 +147,18 @@ jobs:
             BUILD_DIR=$(mktemp -d)
             cp -rL "$pack_ver_dir"/* "$BUILD_DIR/" 2>/dev/null || cp -r "$pack_ver_dir"/* "$BUILD_DIR/"
 
-            cat <<EOF > "$BUILD_DIR/$PKG_ID.nuspec"
-<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
-  <metadata>
-    <id>$PKG_ID</id>
-    <version>$VER</version>
-    <authors>Microsoft</authors>
-    <description>Repackaged RISC-V packs</description>
-  </metadata>
-</package>
-EOF
+            cat <<EOF | sed 's/^[ \t]*//' > "$BUILD_DIR/$PKG_ID.nuspec"
+            <?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+              <metadata>
+                <id>$PKG_ID</id>
+                <version>$VER</version>
+                <authors>Microsoft</authors>
+                <description>Repackaged RISC-V packs</description>
+              </metadata>
+            </package>
+            EOF
+
             LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
             (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${LOWER_ID}.${VER}.nupkg" .)
             rm -rf "$BUILD_DIR"
@@ -182,11 +180,9 @@ EOF
         run: |
           LOONG_VER="10.0.110"
 
-          # 1. 安装与 龙芯 SDK 版本(10.0.110) 完全一致的 ARM64 宿主 SDK
           mkdir -p "/tmp/sdks/sdk-loong"
           ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/sdk-loong"
 
-          # 2. 配置龙芯官方 NuGet 源（加入 --allow-insecure-connections 参数避免 HTTP/SSL 错误）
           "/tmp/sdks/sdk-loong/dotnet" nuget add source \
             "https://lnuget.loongnix.cn/v3/index.json" \
             -n lnuget.loongnix.cn \
@@ -199,7 +195,6 @@ EOF
             --protocol-version 3 \
             --allow-insecure-connections || true
 
-          # 3. 使用对应版本的 SDK 从龙芯源 restore
           echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from Loongson feed..."
           "/tmp/sdks/sdk-loong/dotnet" restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
@@ -231,10 +226,10 @@ EOF
         run: |
           mkdir -p ./nuget-cache
 
-          echo "合并 x64-runner 产物..."
+          echo "合并 x64-runner 产物 (arm64 缓存)..."
           cp -rn ./artifacts/nuget-cache-x64-runner/* ./nuget-cache/ 2>/dev/null || true
 
-          echo "合并 arm64-runner 产物 (自动去重)..."
+          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64 缓存)..."
           cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
 
           find ./nuget-cache -name "*.lock" -delete
