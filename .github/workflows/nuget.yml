@@ -76,7 +76,7 @@ jobs:
           path: ./nuget-cache-x64/
 
   # =========================================================
-  # Job 2: 在 ARM64 Runner 上恢复 x64 及处理 riscv64 / loongarch64
+  # Job 2: 在 ARM64 Runner 上处理 x64, riscv64 & loongarch64
   # =========================================================
   build-arm64-runner:
     runs-on: ubuntu-24.04-arm
@@ -128,26 +128,20 @@ jobs:
               --ignore-failed-sources || true
           done < /tmp/sdk-versions.txt
 
-      - name: Restore riscv64 & loongarch64 using custom SDK packs
+      # ---------------------------------------------------------
+      # RISC-V64：继续使用自定义 SDK Packs 解绑软链接打包还原
+      # ---------------------------------------------------------
+      - name: Restore riscv64 using custom SDK packs
         run: |
           mkdir -p /tmp/local-feed
 
-          # 1. 下载 RISC-V64 SDK 并抽取 packs
           RISCV_VER="10.0.111"
           curl -fL -o riscv64-sdk.tar.gz "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
           mkdir -p /tmp/sdks/riscv64-packs
           tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs ./packs 2>/dev/null || tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-packs
           rm -f riscv64-sdk.tar.gz
 
-          # 2. 下载 LoongArch64 SDK 并抽取 packs
-          LOONG_VER="10.0.110"
-          curl -fL -o loongarch64-sdk.tar.gz "https://github.com/loongson/dotnet/releases/download/v${LOONG_VER}-loongarch64/dotnet-sdk-${LOONG_VER}-linux-loongarch64.tar.gz"
-          mkdir -p /tmp/sdks/loong-packs
-          tar -xzf loongarch64-sdk.tar.gz -C /tmp/sdks/loong-packs ./packs 2>/dev/null || tar -xzf loongarch64-sdk.tar.gz -C /tmp/sdks/loong-packs
-          rm -f loongarch64-sdk.tar.gz
-
-          # 3. 将 riscv64 和 loongarch64 的 packs 实体化打包为 .nupkg
-          find /tmp/sdks -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
+          find /tmp/sdks/riscv64-packs -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
             VER=$(basename "$pack_ver_dir")
             PACK_DIR=$(dirname "$pack_ver_dir")
             PKG_ID=$(basename "$PACK_DIR")
@@ -163,7 +157,7 @@ jobs:
     <id>$PKG_ID</id>
     <version>$VER</version>
     <authors>Microsoft</authors>
-    <description>Repackaged packs</description>
+    <description>Repackaged RISC-V packs</description>
   </metadata>
 </package>
 EOF
@@ -172,17 +166,46 @@ EOF
             rm -rf "$BUILD_DIR"
           done
 
-          # 4. 执行 restore 存入 nuget-cache-arm
-          for RID in linux-riscv64 linux-loongarch64; do
-            echo "==> Restoring $RID using local-feed..."
-            /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
-              --packages ./nuget-cache-arm \
-              --source /tmp/local-feed \
-              --source https://api.nuget.org/v3/index.json \
-              -r "$RID" \
-              -p:EnableWindowsTargeting=true \
-              --ignore-failed-sources || true
-          done
+          echo "==> Restoring linux-riscv64..."
+          /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-arm \
+            --source /tmp/local-feed \
+            --source https://api.nuget.org/v3/index.json \
+            -r linux-riscv64 \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || true
+
+      # ---------------------------------------------------------
+      # LoongArch64：配置龙芯源 + 匹配对应版 ARM64 SDK 直接 Restore
+      # ---------------------------------------------------------
+      - name: Restore loongarch64 using Loongson NuGet source
+        run: |
+          LOONG_VER="10.0.110"
+
+          # 1. 安装与 龙芯 SDK 版本(10.0.110) 完全一致的 ARM64 宿主 SDK
+          mkdir -p "/tmp/sdks/sdk-loong"
+          ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/sdk-loong"
+
+          # 2. 配置龙芯官方 NuGet 源（加入 --allow-insecure-connections 参数避免 HTTP/SSL 错误）
+          "/tmp/sdks/sdk-loong/dotnet" nuget add source \
+            "https://lnuget.loongnix.cn/v3/index.json" \
+            -n lnuget.loongnix.cn \
+            --protocol-version 3 \
+            --allow-insecure-connections || true
+
+          "/tmp/sdks/sdk-loong/dotnet" nuget add source \
+            "http://lnuget.loongnix.cn/v3/index.json" \
+            -n lnuget.loongnix.cn-http \
+            --protocol-version 3 \
+            --allow-insecure-connections || true
+
+          # 3. 使用对应版本的 SDK 从龙芯源 restore
+          echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from Loongson feed..."
+          "/tmp/sdks/sdk-loong/dotnet" restore source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-arm \
+            -r linux-loongarch64 \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败"
 
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v4
@@ -191,7 +214,7 @@ EOF
           path: ./nuget-cache-arm/
 
   # =========================================================
-  # Job 3: 合并两个 Runner 的缓存，去重并发布 Release
+  # Job 3: 合并缓存 & 发布 Release
   # =========================================================
   merge-and-release:
     needs: [build-x64-runner, build-arm64-runner]
@@ -208,18 +231,16 @@ EOF
         run: |
           mkdir -p ./nuget-cache
 
-          echo "正在合并 x64-runner 产物..."
+          echo "合并 x64-runner 产物..."
           cp -rn ./artifacts/nuget-cache-x64-runner/* ./nuget-cache/ 2>/dev/null || true
 
-          echo "正在合并 arm64-runner 产物 (自动去重，不覆盖已有文件)..."
+          echo "合并 arm64-runner 产物 (自动去重)..."
           cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
 
-          # 清理临时/锁定文件
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
 
-          echo "合并完成！NuGet 顶级包目录数量:"
-          ls -1 ./nuget-cache | wc -l
+          echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
 
       - name: Compress NuGet cache
         run: |
@@ -230,7 +251,7 @@ EOF
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .git \
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
