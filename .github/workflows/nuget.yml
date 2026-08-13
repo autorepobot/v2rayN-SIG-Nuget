@@ -35,42 +35,75 @@ jobs:
         run: |
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.1xx'
-      - name: Extract riscv64 and loongarch64 runtime packs before restore
+      - name: Discover latest two 10.0.1xx SDK patch versions
         run: |
-          DOTNET_INSTALL_DIR=$(dirname "$(readlink -f "$(command -v dotnet)")")
-          echo "DOTNET_INSTALL_DIR=$DOTNET_INSTALL_DIR" >> "$GITHUB_ENV"
-          mkdir -p "$DOTNET_INSTALL_DIR/packs"
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+          chmod +x dotnet-install.sh
 
-          # RISC-V64
+          # 拉取 10.0.1xx channel 的官方版本列表，取最新两个 GA/patch 版本
+          RELEASES_JSON=$(curl -fsSL https://raw.githubusercontent.com/dotnet/core/main/release-notes/10.0/releases.json)
+          VERSIONS=$(echo "$RELEASES_JSON" | jq -r '.releases[].sdk.version' | grep -E '^10\.0\.1[0-9][0-9]$' | sort -Vr | uniq | head -2)
+
+          echo "取得的最新两个 SDK 版本:"
+          echo "$VERSIONS"
+          echo "$VERSIONS" > /tmp/sdk-versions.txt
+      - name: Install both SDK versions
+        run: |
+          mkdir -p /tmp/sdks
+          i=0
+          while read -r VER; do
+            i=$((i+1))
+            echo "==> 安装 SDK $VER 到 /tmp/sdks/sdk$i"
+            ./dotnet-install.sh --version "$VER" --install-dir "/tmp/sdks/sdk$i"
+          done < /tmp/sdk-versions.txt
+      - name: Extract riscv64 and loongarch64 runtime packs (latest source)
+        run: |
+          mkdir -p /tmp/riscv64-sdk /tmp/loongarch64-sdk
+
           curl -fL -o riscv64-sdk.tar.gz \
             "https://github.com/xujiegb/dotnet-riscv/releases/download/10.0.111/dotnet-sdk-10.0.111-linux-riscv64.tar.gz"
-          mkdir -p /tmp/riscv64-sdk
           tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-sdk
           rm -f riscv64-sdk.tar.gz
-          cp -r /tmp/riscv64-sdk/packs/* "$DOTNET_INSTALL_DIR/packs/"
 
-          # LoongArch64
           curl -fL -o loongarch64-sdk.tar.gz \
             "https://github.com/loongson/dotnet/releases/download/v10.0.110-loongarch64/dotnet-sdk-10.0.110-linux-loongarch64.tar.gz"
-          mkdir -p /tmp/loongarch64-sdk
           tar -xzf loongarch64-sdk.tar.gz -C /tmp/loongarch64-sdk
           rm -f loongarch64-sdk.tar.gz
-          cp -r /tmp/loongarch64-sdk/packs/* "$DOTNET_INSTALL_DIR/packs/"
-      - name: Restore NuGet packages for all target RIDs
+      - name: Restore for each SDK version and all target RIDs
         run: |
           RIDS="linux-x64 linux-arm64 linux-riscv64 linux-loongarch64"
-          for RID in $RIDS; do
-            echo "==> Restoring for RID: $RID"
-            dotnet restore source/v2rayN/v2rayN.sln \
-              --packages ./nuget-cache \
-              -r "$RID" \
-              -p:EnableWindowsTargeting=true \
-              --ignore-failed-sources || echo "警告: $RID restore 部分失败，继续下一个"
-          done
+          i=0
+          while read -r VER; do
+            i=$((i+1))
+            SDK_DIR="/tmp/sdks/sdk$i"
+            echo "########## 使用 SDK $VER ($SDK_DIR) ##########"
+
+            # 把 riscv64/loongarch64 的 pack 目录，按这个 SDK 实际解析出的版本号补齐
+            for sdk_dir in /tmp/riscv64-sdk /tmp/loongarch64-sdk; do
+              for pack_dir in "$sdk_dir"/packs/*/; do
+                actual_version_dir=$(find "$pack_dir" -maxdepth 1 -mindepth 1 -type d | head -1)
+                [ -z "$actual_version_dir" ] && continue
+                target_dir="${pack_dir}${VER}"
+                if [ ! -d "$target_dir" ]; then
+                  cp -r "$actual_version_dir" "$target_dir"
+                fi
+              done
+              mkdir -p "$SDK_DIR/packs"
+              cp -r "$sdk_dir"/packs/* "$SDK_DIR/packs/"
+            done
+
+            export DOTNET_ROOT="$SDK_DIR"
+            export PATH="$SDK_DIR:$PATH"
+
+            for RID in $RIDS; do
+              echo "==> [$VER] Restoring for RID: $RID"
+              "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
+                --packages ./nuget-cache \
+                -r "$RID" \
+                -p:EnableWindowsTargeting=true \
+                --ignore-failed-sources || echo "警告: [$VER] $RID restore 部分失败，继续下一个"
+            done
+          done < /tmp/sdk-versions.txt
       - name: Merge riscv64 and loongarch64 runtime packs into nuget-cache
         run: |
           for sdk_dir in /tmp/riscv64-sdk /tmp/loongarch64-sdk; do
@@ -81,7 +114,7 @@ jobs:
               cp -r "$dir"* "./nuget-cache/$lower_name/"
             done
           done
-          rm -rf /tmp/riscv64-sdk /tmp/loongarch64-sdk
+          rm -rf /tmp/riscv64-sdk /tmp/loongarch64-sdk /tmp/sdks
       - name: Optimize cache size (remove temp files)
         run: |
           find ./nuget-cache -name "*.lock" -delete
