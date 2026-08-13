@@ -10,7 +10,6 @@ on:
         description: '本次生成的 nuget-cache release 版本号 (tag)'
         required: true
         default: ''
-
 jobs:
   build-cache:
     runs-on: ubuntu-24.04-arm
@@ -21,12 +20,14 @@ jobs:
         run: |
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.1xx'
-
+      - name: Add Loongson NuGet source
+        run: |
+          dotnet nuget add source -n lnuget.loongnix.cn --protocol-version 3 \
+            https://lnuget.loongnix.cn/v3/index.json
       - name: Restore NuGet packages for all target RIDs
         run: |
           RIDS="linux-x64 linux-arm64 linux-riscv64 linux-loongarch64"
@@ -38,16 +39,27 @@ jobs:
               -p:EnableWindowsTargeting=true \
               --ignore-failed-sources || echo "警告: $RID restore 部分失败，继续下一个"
           done
+      - name: Download extra runtime packs (riscv64)
+        run: |
+          mkdir -p extra-packs
 
+          # RISC-V64
+          curl -fL -o riscv64-sdk.tar.gz \
+            "https://github.com/xujiegb/dotnet-riscv/releases/download/10.0.111/dotnet-sdk-10.0.111-linux-riscv64.tar.gz"
+          mkdir -p /tmp/riscv64-sdk
+          tar -xzf riscv64-sdk.tar.gz -C /tmp/riscv64-sdk
+          cp -r /tmp/riscv64-sdk/packs/* extra-packs/
+          rm -rf riscv64-sdk.tar.gz /tmp/riscv64-sdk
+      - name: Compress extra packs
+        run: |
+          tar -czf extra-packs.tar.gz extra-packs
       - name: Optimize cache size (remove temp files)
         run: |
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
-
       - name: Compress NuGet cache
         run: |
           tar -czf nuget-cache.tar.gz nuget-cache
-
       - name: Create Release with cache
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,6 +69,7 @@ jobs:
             --delete "${{ inputs.nuget_cache_version }}" || true
           gh release create "${{ inputs.nuget_cache_version }}" \
             nuget-cache.tar.gz \
+            extra-packs.tar.gz \
             --repo ${{ github.repository }} \
             --title "${{ inputs.nuget_cache_version }}" \
             --notes "源码版本: ${{ inputs.source_ref }} / 缓存版本: ${{ inputs.nuget_cache_version }}"
