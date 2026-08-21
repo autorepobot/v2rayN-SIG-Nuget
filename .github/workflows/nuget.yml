@@ -222,31 +222,162 @@ jobs:
       # ---------------------------------------------------------
       - name: Restore linux-ppc64le using native assets and IBM feed
         run: |
+          set -euo pipefail
+
           PPC_VER="10.0.111"
-          # 自动转换 SDK Patch -> Runtime Patch，如 10.0.111 转为 10.0.11
           RTM_VER="${PPC_VER%.*}.$(( ${PPC_VER##*.} - 100 ))"
 
-          mkdir -p /tmp/local-feed-ppc "/tmp/sdks/sdk-ppc"
+          SKIA_VER="3.119.4"
+          HARF_VER="8.3.1.5"
 
-          echo "下载 SkiaSharp & HarfBuzzSharp ppc64le 原生包..."
-          curl -fL -o /tmp/local-feed-ppc/SkiaSharp.NativeAssets.Linux.3.119.4.nupkg \
-            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v3.119.4/SkiaSharp.NativeAssets.Linux.3.119.4.nupkg"
-          curl -fL -o /tmp/local-feed-ppc/HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg \
-            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v3.119.4/HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg"
+          mkdir -p \
+            /tmp/local-feed-ppc \
+            /tmp/official-nupkgs \
+            /tmp/ppc-nupkgs \
+            /tmp/merged-nupkgs \
+            /tmp/sdks/sdk-ppc
 
-          echo "下载 IBM .NET Runtime/Host nupkg (对应 Runtime 版本: $RTM_VER)..."
-          curl -fL -o /tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg \
+          curl -fL \
+            -o "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v${SKIA_VER}/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v${SKIA_VER}/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/official-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "https://api.nuget.org/v3-flatcontainer/skiasharp.nativeassets.linux/${SKIA_VER}/skiasharp.nativeassets.linux.${SKIA_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/official-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "https://api.nuget.org/v3-flatcontainer/harfbuzzsharp.nativeassets.linux/${HARF_VER}/harfbuzzsharp.nativeassets.linux.${HARF_VER}.nupkg"
+
+          merge_native_package() {
+            local PACKAGE_ID="$1"
+            local VERSION="$2"
+            local OFFICIAL_NUPKG="$3"
+            local PPC_NUPKG="$4"
+
+            local WORK_DIR
+            local OFFICIAL_DIR
+            local PPC_DIR
+            local MERGED_NUPKG
+            local CACHE_DIR
+
+            WORK_DIR=$(mktemp -d)
+            OFFICIAL_DIR="$WORK_DIR/official"
+            PPC_DIR="$WORK_DIR/ppc"
+
+            mkdir -p \
+              "$OFFICIAL_DIR" \
+              "$PPC_DIR"
+
+            unzip -q \
+              "$OFFICIAL_NUPKG" \
+              -d "$OFFICIAL_DIR"
+
+            unzip -q \
+              "$PPC_NUPKG" \
+              -d "$PPC_DIR"
+
+            test -d "$PPC_DIR/runtimes/linux-ppc64le"
+
+            rm -rf \
+              "$OFFICIAL_DIR/runtimes/linux-ppc64le"
+
+            mkdir -p \
+              "$OFFICIAL_DIR/runtimes"
+
+            cp -a \
+              "$PPC_DIR/runtimes/linux-ppc64le" \
+              "$OFFICIAL_DIR/runtimes/"
+
+            test -d \
+              "$OFFICIAL_DIR/runtimes/linux-ppc64le"
+
+            MERGED_NUPKG="/tmp/merged-nupkgs/$(basename "$OFFICIAL_NUPKG")"
+
+            (
+              cd "$OFFICIAL_DIR"
+              zip -9 -rq \
+                "$MERGED_NUPKG" \
+                .
+            )
+
+            unzip -l "$MERGED_NUPKG" |
+              grep -q 'runtimes/linux-ppc64le/'
+
+            CACHE_DIR="./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
+
+            rm -rf "$CACHE_DIR"
+            mkdir -p "$CACHE_DIR"
+
+            unzip -q \
+              "$MERGED_NUPKG" \
+              -d "$CACHE_DIR"
+
+            cp \
+              "$MERGED_NUPKG" \
+              "$CACHE_DIR/"
+
+            printf 'This file is intentionally blank.\n' \
+              > "$CACHE_DIR/.nupkg.metadata"
+
+            openssl dgst \
+              -sha512 \
+              -binary \
+              "$MERGED_NUPKG" |
+              base64 -w0 \
+              > "$CACHE_DIR/.sha512"
+
+            test -f \
+              "$CACHE_DIR/$(basename "$MERGED_NUPKG")"
+
+            test -d \
+              "$CACHE_DIR/runtimes/linux-ppc64le"
+
+            rm -rf "$WORK_DIR"
+          }
+
+          merge_native_package \
+            "skiasharp.nativeassets.linux" \
+            "$SKIA_VER" \
+            "/tmp/official-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
+
+          merge_native_package \
+            "harfbuzzsharp.nativeassets.linux" \
+            "$HARF_VER" \
+            "/tmp/official-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
+
+          cp \
+            "/tmp/merged-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            /tmp/local-feed-ppc/
+
+          cp \
+            "/tmp/merged-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            /tmp/local-feed-ppc/
+
+          curl -fL \
+            -o "/tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
             "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
-          curl -fL -o /tmp/local-feed-ppc/microsoft.netcore.app.host.linux-ppc64le.${RTM_VER}.nupkg \
+
+          curl -fL \
+            -o "/tmp/local-feed-ppc/microsoft.netcore.app.host.linux-ppc64le.${RTM_VER}.nupkg" \
             "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
-          curl -fL -o /tmp/local-feed-ppc/microsoft.netcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg \
+
+          curl -fL \
+            -o "/tmp/local-feed-ppc/microsoft.netcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
             "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
 
-          echo "安装 $PPC_VER ARM64 SDK 用于 restore 执行..."
-          ./dotnet-install.sh --version "$PPC_VER" --install-dir "/tmp/sdks/sdk-ppc"
+          ./dotnet-install.sh \
+            --version "$PPC_VER" \
+            --install-dir "/tmp/sdks/sdk-ppc"
 
-          echo "==> Restoring linux-ppc64le with SDK $PPC_VER..."
-          "/tmp/sdks/sdk-ppc/dotnet" restore source/v2rayN/v2rayN.sln \
+          "/tmp/sdks/sdk-ppc/dotnet" restore \
+            source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
             --source /tmp/local-feed-ppc \
             --source https://api.nuget.org/v3/index.json \
@@ -276,6 +407,8 @@ jobs:
 
       - name: Merge caches & deduplicate
         run: |
+          set -euo pipefail
+
           mkdir -p ./nuget-cache
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
@@ -286,6 +419,57 @@ jobs:
 
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
+
+          test -d \
+            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4/runtimes/linux-ppc64le
+
+          test -d \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5/runtimes/linux-ppc64le
+
+          SKIA_NUPKG=$(find \
+            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
+            -maxdepth 1 \
+            -type f \
+            -name 'SkiaSharp.NativeAssets.Linux.3.119.4.nupkg' \
+            -print \
+            -quit)
+
+          HARF_NUPKG=$(find \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
+            -maxdepth 1 \
+            -type f \
+            -name 'HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg' \
+            -print \
+            -quit)
+
+          test -n "$SKIA_NUPKG"
+          test -n "$HARF_NUPKG"
+
+          unzip -l "$SKIA_NUPKG" |
+            grep -q 'runtimes/linux-ppc64le/'
+
+          unzip -l "$HARF_NUPKG" |
+            grep -q 'runtimes/linux-ppc64le/'
+
+          SKIA_NUPKG_COUNT=$(find \
+            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
+            -maxdepth 1 \
+            -type f \
+            -name '*.nupkg' |
+            wc -l)
+
+          HARF_NUPKG_COUNT=$(find \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
+            -maxdepth 1 \
+            -type f \
+            -name '*.nupkg' |
+            wc -l)
+
+          test "$SKIA_NUPKG_COUNT" -eq 1
+          test "$HARF_NUPKG_COUNT" -eq 1
+
+          echo "SkiaSharp nupkg count: $SKIA_NUPKG_COUNT"
+          echo "HarfBuzzSharp nupkg count: $HARF_NUPKG_COUNT"
 
           echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
 
@@ -298,7 +482,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .git \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
