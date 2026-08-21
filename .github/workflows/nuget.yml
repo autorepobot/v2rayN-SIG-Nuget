@@ -261,7 +261,7 @@ jobs:
           path: ./nuget-cache-arm/
 
   # =========================================================
-  # Job 3: 合并缓存 & 发布 Release
+  # Job 3: 合并缓存、核心瘦身 & 发布 Release
   # =========================================================
   merge-and-release:
     needs: [build-x64-runner, build-arm64-runner]
@@ -274,7 +274,7 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Merge caches & deduplicate
+      - name: Merge & Slim down nuget-cache
         run: |
           mkdir -p ./nuget-cache
 
@@ -284,10 +284,15 @@ jobs:
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
           cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
 
-          find ./nuget-cache -name "*.lock" -delete
-          find ./nuget-cache -name "*.tmp" -delete
+          # 1. 删除临时锁文件与缓存中间文件
+          find ./nuget-cache -name "*.lock" -o -name "*.tmp" -delete
 
-          echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
+          # 2. 核心瘦身：清理原始 .nupkg，但严禁删除 .nupkg.sha512 校验文件
+          find ./nuget-cache -type f -name "*.nupkg" ! -name "*.sha512" -delete
+
+          echo "瘦身完成！顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
+          echo "瘦身后的缓存体积："
+          du -sh ./nuget-cache
 
       - name: Compress NuGet cache
         run: |
