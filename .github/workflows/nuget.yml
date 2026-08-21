@@ -79,7 +79,7 @@ jobs:
           path: ./nuget-cache-x64/
 
   # =========================================================
-  # Job 2: 在 ARM64 Runner 上处理 linux-x64, riscv64 & loongarch64
+  # Job 2: 在 ARM64 Runner 上处理 linux-x64, riscv64, loongarch64 & ppc64le
   # =========================================================
   build-arm64-runner:
     runs-on: ubuntu-24.04-arm
@@ -217,6 +217,43 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败"
 
+      # ---------------------------------------------------------
+      # PPC64LE：拉取第三方原生包与 IBM 运行时资源包本地还原
+      # ---------------------------------------------------------
+      - name: Restore linux-ppc64le using native assets and IBM feed
+        run: |
+          PPC_VER="10.0.111"
+          # 自动转换 SDK Patch -> Runtime Patch，如 10.0.111 转为 10.0.11
+          RTM_VER="${PPC_VER%.*}.$(( ${PPC_VER##*.} - 100 ))"
+
+          mkdir -p /tmp/local-feed-ppc "/tmp/sdks/sdk-ppc"
+
+          echo "下载 SkiaSharp & HarfBuzzSharp ppc64le 原生包..."
+          curl -fL -o /tmp/local-feed-ppc/SkiaSharp.NativeAssets.Linux.3.119.4.nupkg \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v3.119.4/SkiaSharp.NativeAssets.Linux.3.119.4.nupkg"
+          curl -fL -o /tmp/local-feed-ppc/HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v3.119.4/HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg"
+
+          echo "下载 IBM .NET Runtime/Host nupkg (对应 Runtime 版本: $RTM_VER)..."
+          curl -fL -o /tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg \
+            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+          curl -fL -o /tmp/local-feed-ppc/microsoft.netcore.app.host.linux-ppc64le.${RTM_VER}.nupkg \
+            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
+          curl -fL -o /tmp/local-feed-ppc/microsoft.netcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg \
+            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+
+          echo "安装 $PPC_VER ARM64 SDK 用于 restore 执行..."
+          ./dotnet-install.sh --version "$PPC_VER" --install-dir "/tmp/sdks/sdk-ppc"
+
+          echo "==> Restoring linux-ppc64le with SDK $PPC_VER..."
+          "/tmp/sdks/sdk-ppc/dotnet" restore source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-arm \
+            --source /tmp/local-feed-ppc \
+            --source https://api.nuget.org/v3/index.json \
+            -r linux-ppc64le \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || echo "警告: linux-ppc64le restore 部分失败"
+
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v6
         with:
@@ -244,7 +281,7 @@ jobs:
           echo "合并 x64-runner 产物 (arm64 缓存)..."
           cp -rn ./artifacts/nuget-cache-x64-runner/* ./nuget-cache/ 2>/dev/null || true
 
-          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64 缓存)..."
+          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
           cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
 
           find ./nuget-cache -name "*.lock" -delete
