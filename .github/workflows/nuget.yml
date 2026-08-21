@@ -412,10 +412,14 @@ jobs:
           mkdir -p ./nuget-cache
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
-          cp -rn ./artifacts/nuget-cache-x64-runner/* ./nuget-cache/ 2>/dev/null || true
+          rsync -a \
+            ./artifacts/nuget-cache-x64-runner/ \
+            ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
-          cp -rn ./artifacts/nuget-cache-arm64-runner/* ./nuget-cache/ 2>/dev/null || true
+          rsync -a \
+            ./artifacts/nuget-cache-arm64-runner/ \
+            ./nuget-cache/
 
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
@@ -482,7 +486,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@GitHub.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
