@@ -186,62 +186,58 @@ jobs:
           done < /tmp/sdk-versions.txt
 
       # ---------------------------------------------------------
-      # RISC-V64：解压完整 SDK 并解绑软链接，生成真实体包
+      # RISC-V64：使用 ARM64 SDK + 预构建 RISC-V NuGet 包
       # ---------------------------------------------------------
-      - name: Restore riscv64 using custom SDK packs
+      - name: Restore riscv64 using prebuilt NuGet packages
         run: |
-          mkdir -p /tmp/local-feed /tmp/sdks/riscv64-sdk
+          set -euo pipefail
 
-          RISCV_VER="10.0.111"
-          curl -fL -o riscv64-sdk.tar.gz "https://github.com/xujiegb/dotnet-riscv/releases/download/${RISCV_VER}/dotnet-sdk-${RISCV_VER}-linux-riscv64.tar.gz"
+          RISCV_SDK_VER="10.0.111"
 
-          # 1. 重点：解压完整 SDK（不加 ./packs 限制），保留 shared 目录供软链接解析
-          tar -xzf riscv64-sdk.tar.gz -C /tmp/sdks/riscv64-sdk
-          rm -f riscv64-sdk.tar.gz
+          # .NET SDK feature band -> RISC-V NuGet package version
+          # 10.0.111 -> 10.0.11
+          # 10.0.110 -> 10.0.10
+          # 10.0.109 -> 10.0.09
+          RISCV_PATCH=$((10#${RISCV_SDK_VER##*.} - 100))
+          RISCV_NUPKG_VER="${RISCV_SDK_VER%.*}.$(printf '%02d' "$RISCV_PATCH")"
 
-          # 2. 遍历打包
-          find /tmp/sdks/riscv64-sdk/packs -path "*/packs/*/*" -type d | while read -r pack_ver_dir; do
-            VER=$(basename "$pack_ver_dir")
-            PACK_DIR=$(dirname "$pack_ver_dir")
-            PKG_ID=$(basename "$PACK_DIR")
-            if [[ ! "$VER" =~ ^[0-9] ]]; then continue; fi
+          FEED="/tmp/local-feed-riscv"
+          mkdir -p "$FEED"
 
-            # 过滤：如果包名包含 linux- 却不是 riscv64（比如 loongarch64），直接跳过
-            if [[ "$PKG_ID" =~ linux- && ! "$PKG_ID" =~ riscv64 ]]; then
-              echo "跳过非 riscv64 包: $PKG_ID"
-              continue
-            fi
+          echo "==> RISC-V SDK version: $RISCV_SDK_VER"
+          echo "==> RISC-V NuGet package version: $RISCV_NUPKG_VER"
 
-            BUILD_DIR=$(mktemp -d)
+          curl -fL \
+            -o "$FEED/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
 
-            # 3. 重点：通过 cp -rL 将软链接指向的 shared/ 实体文件彻底“解绑/复制”进来
-            cp -rL "$pack_ver_dir"/* "$BUILD_DIR/"
+          curl -fL \
+            -o "$FEED/Microsoft.NETCore.App.Host.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
 
-            echo '<?xml version="1.0" encoding="utf-8"?>
-            <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
-              <metadata>
-                <id>'"$PKG_ID"'</id>
-                <version>'"$VER"'</version>
-                <authors>Microsoft</authors>
-                <description>Repackaged RISC-V packs with real binaries</description>
-              </metadata>
-            </package>' > "$BUILD_DIR/$PKG_ID.nuspec"
+          curl -fL \
+            -o "$FEED/Microsoft.NETCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
 
-            LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
-            (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${lower_id}.${VER}.nupkg" .)
-            rm -rf "$BUILD_DIR"
-            echo "打包完成实体包: ${lower_id}.${VER}.nupkg"
-          done
+          echo "Downloaded RISC-V64 NuGet packages:"
+          ls -lh "$FEED"
 
-          echo "==> Restoring linux-riscv64..."
+          # 使用 ARM64 Runner 上已经安装好的 .NET SDK 注册本地源
+          /tmp/sdks/sdk1/dotnet nuget add source \
+            "$FEED" \
+            -n local-riscv \
+            --protocol-version 3 \
+            || true
+
+          echo "==> Restoring linux-riscv64 using ARM64 SDK $RISCV_SDK_VER..."
           /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
-            --source /tmp/local-feed \
+            --source local-riscv \
             --source /tmp/local-feed-skia \
             --source https://api.nuget.org/v3/index.json \
             -r linux-riscv64 \
             -p:EnableWindowsTargeting=true \
-            --ignore-failed-sources || true
+            --ignore-failed-sources || echo "警告: linux-riscv64 restore 部分失败"
 
       # ---------------------------------------------------------
       # LoongArch64：配置龙芯源 + 匹配对应版 ARM64 SDK 直接 Restore
