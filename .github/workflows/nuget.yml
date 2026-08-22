@@ -277,8 +277,12 @@ jobs:
               "$OFFICIAL_NUPKG" \
               -d "$OFFICIAL_DIR"
 
+            find "$OFFICIAL_DIR" \
+              -name '.signature.p7s' \
+              -type f \
+              -delete
+
             rm -f \
-              "$OFFICIAL_DIR"/*.signature.p7s \
               "$OFFICIAL_DIR/package/services/metadata/signatures.xml"
 
             unzip -q \
