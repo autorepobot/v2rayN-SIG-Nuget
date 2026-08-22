@@ -58,6 +58,28 @@ jobs:
 
           printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
 
+      - name: Download SkiaSharp and HarfBuzzSharp packages from GitHub Release
+        run: |
+          set -euo pipefail
+
+          SKIA_VER="3.119.4"
+          HARF_VER="8.3.1.5"
+          RELEASE_TAG="v${SKIA_VER}"
+          FEED="/tmp/local-feed-skia"
+
+          mkdir -p "$FEED"
+
+          curl -fL \
+            -o "$FEED/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/${RELEASE_TAG}/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
+
+          curl -fL \
+            -o "$FEED/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/${RELEASE_TAG}/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
+
+          echo "Downloaded SkiaSharp/HarfBuzzSharp packages:"
+          ls -lh "$FEED"
+
       - name: Restore linux-arm64 ONLY
         run: |
           i=0
@@ -67,6 +89,8 @@ jobs:
             echo "==> [x64 Runner] Restoring linux-arm64 with SDK $VER"
             "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
               --packages ./nuget-cache-x64 \
+              --source /tmp/local-feed-skia \
+              --source https://api.nuget.org/v3/index.json \
               -r linux-arm64 \
               -p:EnableWindowsTargeting=true \
               --ignore-failed-sources || true
@@ -123,6 +147,28 @@ jobs:
 
           printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
 
+      - name: Download SkiaSharp and HarfBuzzSharp packages from GitHub Release
+        run: |
+          set -euo pipefail
+
+          SKIA_VER="3.119.4"
+          HARF_VER="8.3.1.5"
+          RELEASE_TAG="v${SKIA_VER}"
+          FEED="/tmp/local-feed-skia"
+
+          mkdir -p "$FEED"
+
+          curl -fL \
+            -o "$FEED/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/${RELEASE_TAG}/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
+
+          curl -fL \
+            -o "$FEED/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/${RELEASE_TAG}/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
+
+          echo "Downloaded SkiaSharp/HarfBuzzSharp packages:"
+          ls -lh "$FEED"
+
       - name: Restore linux-x64
         run: |
           i=0
@@ -132,6 +178,8 @@ jobs:
             echo "==> [ARM64 Runner] Restoring linux-x64 with SDK $VER"
             "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
               --packages ./nuget-cache-arm \
+              --source /tmp/local-feed-skia \
+              --source https://api.nuget.org/v3/index.json \
               -r linux-x64 \
               -p:EnableWindowsTargeting=true \
               --ignore-failed-sources || true
@@ -180,15 +228,16 @@ jobs:
             </package>' > "$BUILD_DIR/$PKG_ID.nuspec"
 
             LOWER_ID=$(echo "$PKG_ID" | tr '[:upper:]' '[:lower:]')
-            (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${LOWER_ID}.${VER}.nupkg" .)
+            (cd "$BUILD_DIR" && zip -rq "/tmp/local-feed/${lower_id}.${VER}.nupkg" .)
             rm -rf "$BUILD_DIR"
-            echo "打包完成实体包: ${LOWER_ID}.${VER}.nupkg"
+            echo "打包完成实体包: ${lower_id}.${VER}.nupkg"
           done
 
           echo "==> Restoring linux-riscv64..."
           /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
             --source /tmp/local-feed \
+            --source /tmp/local-feed-skia \
             --source https://api.nuget.org/v3/index.json \
             -r linux-riscv64 \
             -p:EnableWindowsTargeting=true \
@@ -213,192 +262,24 @@ jobs:
           echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from Loongson feed..."
           "/tmp/sdks/sdk-loong/dotnet" restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
+            --source /tmp/local-feed-skia \
+            --source https://lnuget.loongnix.cn/v3/index.json \
+            --source https://api.nuget.org/v3/index.json \
             -r linux-loongarch64 \
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败"
 
       # ---------------------------------------------------------
-      # PPC64LE：拉取第三方原生包与 IBM 运行时资源包本地还原
+      # PPC64LE：直接使用 GitHub Release 提供的 SkiaSharp/HarfBuzzSharp
       # ---------------------------------------------------------
-      - name: Restore linux-ppc64le using native assets and IBM feed
+      - name: Restore linux-ppc64le using GitHub SkiaSharp/HarfBuzzSharp packages
         run: |
           set -euo pipefail
 
           PPC_VER="10.0.111"
           RTM_VER="${PPC_VER%.*}.$(( ${PPC_VER##*.} - 100 ))"
 
-          SKIA_VER="3.119.4"
-          HARF_VER="8.3.1.5"
-
-          mkdir -p \
-            /tmp/local-feed-ppc \
-            /tmp/official-nupkgs \
-            /tmp/ppc-nupkgs \
-            /tmp/merged-nupkgs \
-            /tmp/sdks/sdk-ppc
-
-          curl -fL \
-            -o "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v${SKIA_VER}/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
-
-          curl -fL \
-            -o "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            "https://github.com/autorepobot/SkiaSharp-ppc64le/releases/download/v${SKIA_VER}/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
-
-          curl -fL \
-            -o "/tmp/official-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            "https://api.nuget.org/v3-flatcontainer/skiasharp.nativeassets.linux/${SKIA_VER}/skiasharp.nativeassets.linux.${SKIA_VER}.nupkg"
-
-          curl -fL \
-            -o "/tmp/official-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            "https://api.nuget.org/v3-flatcontainer/harfbuzzsharp.nativeassets.linux/${HARF_VER}/harfbuzzsharp.nativeassets.linux.${HARF_VER}.nupkg"
-
-          merge_native_package() {
-            local PACKAGE_ID="$1"
-            local VERSION="$2"
-            local OFFICIAL_NUPKG="$3"
-            local PPC_NUPKG="$4"
-            local TARGET_FILE="$5"
-
-            local WORK_DIR
-            local OFFICIAL_DIR
-            local PPC_DIR
-            local MERGED_NUPKG
-            local CACHE_DIR
-
-            WORK_DIR=$(mktemp -d)
-            OFFICIAL_DIR="$WORK_DIR/official"
-            PPC_DIR="$WORK_DIR/ppc"
-
-            mkdir -p \
-              "$OFFICIAL_DIR" \
-              "$PPC_DIR"
-
-            unzip -q \
-              "$OFFICIAL_NUPKG" \
-              -d "$OFFICIAL_DIR"
-
-            find "$OFFICIAL_DIR" \
-              -name '.signature.p7s' \
-              -type f \
-              -delete
-
-            rm -f \
-              "$OFFICIAL_DIR/package/services/metadata/signatures.xml"
-
-            unzip -q \
-              "$PPC_NUPKG" \
-              -d "$PPC_DIR"
-
-            # -----------------------------------------------------
-            # 1. 替换 PPC64LE runtime 原生文件
-            # -----------------------------------------------------
-            test -d "$PPC_DIR/runtimes/linux-ppc64le"
-
-            rm -rf \
-              "$OFFICIAL_DIR/runtimes/linux-ppc64le"
-
-            mkdir -p \
-              "$OFFICIAL_DIR/runtimes"
-
-            cp -a \
-              "$PPC_DIR/runtimes/linux-ppc64le" \
-              "$OFFICIAL_DIR/runtimes/"
-
-            test -d \
-              "$OFFICIAL_DIR/runtimes/linux-ppc64le"
-
-            # -----------------------------------------------------
-            # 2. 替换 PPC64LE 专用 targets
-            #
-            # 不写死 net48 / net462。
-            # 直接扫描 PPC 包中的：
-            #
-            #   build/net*/<TARGET_FILE>
-            #   buildTransitive/net*/<TARGET_FILE>
-            #
-            # 然后覆盖官方包中的对应文件。
-            # -----------------------------------------------------
-            for TARGET_ROOT in build buildTransitive; do
-              if [ -d "$PPC_DIR/$TARGET_ROOT" ]; then
-                while IFS= read -r PPC_TARGET; do
-                  REL_PATH="${PPC_TARGET#"$PPC_DIR/"}"
-                  TARGET_DEST="$OFFICIAL_DIR/$REL_PATH"
-
-                  echo "==> 替换 PPC64LE target:"
-                  echo "    $REL_PATH"
-
-                  mkdir -p "$(dirname "$TARGET_DEST")"
-                  cp -f "$PPC_TARGET" "$TARGET_DEST"
-                done < <(
-                  find "$PPC_DIR/$TARGET_ROOT" \
-                    -type f \
-                    -path "$PPC_DIR/$TARGET_ROOT/net*/$TARGET_FILE" \
-                    -print
-                )
-              fi
-            done
-
-            # -----------------------------------------------------
-            # 3. 验证 PPC64LE targets 已经进入最终包目录
-            # -----------------------------------------------------
-            echo "==> Final $PACKAGE_ID targets:"
-
-            find "$OFFICIAL_DIR/build" \
-              -type f \
-              -path "$OFFICIAL_DIR/build/net*/$TARGET_FILE" \
-              -print 2>/dev/null || true
-
-            find "$OFFICIAL_DIR/buildTransitive" \
-              -type f \
-              -path "$OFFICIAL_DIR/buildTransitive/net*/$TARGET_FILE" \
-              -print 2>/dev/null || true
-
-            MERGED_NUPKG="/tmp/merged-nupkgs/$(basename "$OFFICIAL_NUPKG")"
-
-            (
-              cd "$OFFICIAL_DIR"
-              zip -9 -rq \
-                "$MERGED_NUPKG" \
-                .
-            )
-
-            unzip -l "$MERGED_NUPKG" |
-              grep -q 'runtimes/linux-ppc64le/'
-
-            # 验证最终 nupkg 中至少存在对应 targets
-            unzip -l "$MERGED_NUPKG" |
-              grep -Eq "(build|buildTransitive)/net[^/]*/${TARGET_FILE}"
-
-            CACHE_DIR="./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
-
-            rm -rf "$CACHE_DIR"
-
-            rm -rf \
-              "$WORK_DIR"
-          }
-
-          merge_native_package \
-            "skiasharp.nativeassets.linux" \
-            "$SKIA_VER" \
-            "/tmp/official-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            "SkiaSharp.NativeAssets.Linux.targets"
-
-          merge_native_package \
-            "harfbuzzsharp.nativeassets.linux" \
-            "$HARF_VER" \
-            "/tmp/official-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            "HarfBuzzSharp.NativeAssets.Linux.targets"
-
-          cp \
-            "/tmp/merged-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            /tmp/local-feed-ppc/
-
-          cp \
-            "/tmp/merged-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            /tmp/local-feed-ppc/
+          mkdir -p /tmp/local-feed-ppc
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
@@ -419,58 +300,12 @@ jobs:
           "/tmp/sdks/sdk-ppc/dotnet" restore \
             source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
+            --source /tmp/local-feed-skia \
             --source /tmp/local-feed-ppc \
             --source https://api.nuget.org/v3/index.json \
             -r linux-ppc64le \
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-ppc64le restore 部分失败"
-
-      - name: Validate SkiaSharp and HarfBuzzSharp versions
-        run: |
-          set -euo pipefail
-
-          SKIA_ROOT="./nuget-cache-arm/skiasharp.nativeassets.linux"
-          HARF_ROOT="./nuget-cache-arm/harfbuzzsharp.nativeassets.linux"
-
-          SKIA_VERSIONS=$(find \
-            "$SKIA_ROOT" \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -printf '%f\n' |
-            sort -V)
-
-          HARF_VERSIONS=$(find \
-            "$HARF_ROOT" \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -printf '%f\n' |
-            sort -V)
-
-          echo "SkiaSharp versions:"
-          printf '%s\n' "$SKIA_VERSIONS"
-
-          echo "HarfBuzzSharp versions:"
-          printf '%s\n' "$HARF_VERSIONS"
-
-          SKIA_COUNT=$(printf '%s\n' "$SKIA_VERSIONS" | sed '/^$/d' | wc -l)
-          HARF_COUNT=$(printf '%s\n' "$HARF_VERSIONS" | sed '/^$/d' | wc -l)
-
-          echo "SkiaSharp version count: $SKIA_COUNT"
-          echo "HarfBuzzSharp version count: $HARF_COUNT"
-
-          if [ "$SKIA_COUNT" -gt 1 ]; then
-            echo "ERROR: Multiple SkiaSharp.NativeAssets.Linux versions detected:"
-            printf '%s\n' "$SKIA_VERSIONS"
-            exit 1
-          fi
-
-          if [ "$HARF_COUNT" -gt 1 ]; then
-            echo "ERROR: Multiple HarfBuzzSharp.NativeAssets.Linux versions detected:"
-            printf '%s\n' "$HARF_VERSIONS"
-            exit 1
-          fi
 
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v6
@@ -500,131 +335,16 @@ jobs:
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
           rsync -av \
-            --exclude='skiasharp.nativeassets.linux/' \
-            --exclude='harfbuzzsharp.nativeassets.linux/' \
             ./artifacts/nuget-cache-x64-runner/ \
             ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
           rsync -av \
-            --exclude='skiasharp.nativeassets.linux/' \
-            --exclude='harfbuzzsharp.nativeassets.linux/' \
             ./artifacts/nuget-cache-arm64-runner/ \
             ./nuget-cache/
 
-          echo "ARM64 SkiaSharp cache:"
-          find \
-            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux \
-            -mindepth 1 \
-            -maxdepth 2 \
-            -print
-
-          echo "ARM64 HarfBuzzSharp cache:"
-          find \
-            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux \
-            -mindepth 1 \
-            -maxdepth 2 \
-            -print
-
-          SKIA_DIR=$(find \
-            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -print \
-            -quit)
-
-          HARF_DIR=$(find \
-            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -print \
-            -quit)
-
-          echo "SKIA_DIR=$SKIA_DIR"
-          echo "HARF_DIR=$HARF_DIR"
-
-          test -n "$SKIA_DIR"
-          test -n "$HARF_DIR"
-
-          SKIA_VERSION=$(basename "$SKIA_DIR")
-          HARF_VERSION=$(basename "$HARF_DIR")
-
-          rm -rf \
-            ./nuget-cache/skiasharp.nativeassets.linux \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux
-
-          mkdir -p \
-            ./nuget-cache/skiasharp.nativeassets.linux \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux
-
-          cp -a \
-            "$SKIA_DIR" \
-            ./nuget-cache/skiasharp.nativeassets.linux/
-
-          cp -a \
-            "$HARF_DIR" \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux/
-
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
-
-          SKIA_CACHE_DIR="$SKIA_DIR"
-          HARF_CACHE_DIR="$HARF_DIR"
-
-          test -d \
-            "$SKIA_CACHE_DIR/runtimes/linux-ppc64le"
-
-          test -d \
-            "$HARF_CACHE_DIR/runtimes/linux-ppc64le"
-
-          SKIA_NUPKG=$(find \
-            "$SKIA_CACHE_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -name '*.nupkg' \
-            -print \
-            -quit)
-
-          HARF_NUPKG=$(find \
-            "$HARF_CACHE_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -name '*.nupkg' \
-            -print \
-            -quit)
-
-          test -n "$SKIA_NUPKG"
-          test -n "$HARF_NUPKG"
-
-          unzip -l "$SKIA_NUPKG" |
-            grep -q 'runtimes/linux-ppc64le/'
-
-          unzip -l "$HARF_NUPKG" |
-            grep -q 'runtimes/linux-ppc64le/'
-
-          SKIA_NUPKG_COUNT=$(find \
-            "$SKIA_CACHE_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -name '*.nupkg' |
-            wc -l)
-
-          HARF_NUPKG_COUNT=$(find \
-            "$HARF_CACHE_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -name '*.nupkg' |
-            wc -l)
-
-          test "$SKIA_NUPKG_COUNT" -eq 1
-          test "$HARF_NUPKG_COUNT" -eq 1
-
-          echo "SkiaSharp version: $SKIA_VERSION"
-          echo "HarfBuzzSharp version: $HARF_VERSION"
-          echo "SkiaSharp nupkg count: $SKIA_NUPKG_COUNT"
-          echo "HarfBuzzSharp nupkg count: $HARF_NUPKG_COUNT"
 
           echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
 
@@ -637,7 +357,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@GitHub.com/${{ github.repository }}.git" \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}GitHub.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
