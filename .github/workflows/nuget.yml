@@ -386,13 +386,13 @@ jobs:
           mkdir -p ./nuget-cache
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
-          rsync -a \
-            ./artifacts/nuget-cache-x64-runner/ \
+          cp -a \
+            ./artifacts/nuget-cache-x64-runner/. \
             ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
-          rsync -a \
-            ./artifacts/nuget-cache-arm64-runner/ \
+          cp -a \
+            ./artifacts/nuget-cache-arm64-runner/. \
             ./nuget-cache/
 
           find ./nuget-cache -name "*.lock" -delete
