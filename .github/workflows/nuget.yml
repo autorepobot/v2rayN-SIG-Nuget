@@ -401,9 +401,9 @@ jobs:
             ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
-          rsync -a \
-            --exclude='skiasharp.nativeassets.linux/***' \
-            --exclude='harfbuzzsharp.nativeassets.linux/***' \
+          rsync -av \
+            --exclude='skiasharp.nativeassets.linux/' \
+            --exclude='harfbuzzsharp.nativeassets.linux/' \
             ./artifacts/nuget-cache-arm64-runner/ \
             ./nuget-cache/
 
