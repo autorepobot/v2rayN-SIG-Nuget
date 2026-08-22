@@ -263,7 +263,6 @@ jobs:
             local OFFICIAL_DIR
             local PPC_DIR
             local MERGED_NUPKG
-            local CACHE_DIR
 
             WORK_DIR=$(mktemp -d)
             OFFICIAL_DIR="$WORK_DIR/official"
@@ -308,36 +307,11 @@ jobs:
             unzip -l "$MERGED_NUPKG" |
               grep -q 'runtimes/linux-ppc64le/'
 
-            CACHE_DIR="./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
+            rm -rf \
+              "./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
 
-            rm -rf "$CACHE_DIR"
-            mkdir -p "$CACHE_DIR"
-
-            unzip -q \
-              "$MERGED_NUPKG" \
-              -d "$CACHE_DIR"
-
-            cp \
-              "$MERGED_NUPKG" \
-              "$CACHE_DIR/"
-
-            printf 'This file is intentionally blank.\n' \
-              > "$CACHE_DIR/.nupkg.metadata"
-
-            openssl dgst \
-              -sha512 \
-              -binary \
-              "$MERGED_NUPKG" |
-              base64 -w0 \
-              > "$CACHE_DIR/.sha512"
-
-            test -f \
-              "$CACHE_DIR/$(basename "$MERGED_NUPKG")"
-
-            test -d \
-              "$CACHE_DIR/runtimes/linux-ppc64le"
-
-            rm -rf "$WORK_DIR"
+            rm -rf \
+              "$WORK_DIR"
           }
 
           merge_native_package \
@@ -486,7 +460,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@GitHub.com/${{ github.repository }}.git" \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}GitHub.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
