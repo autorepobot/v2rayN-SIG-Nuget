@@ -396,7 +396,9 @@ jobs:
           mkdir -p ./nuget-cache
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
-          rsync -a \
+          rsync -av \
+            --exclude='skiasharp.nativeassets.linux/' \
+            --exclude='harfbuzzsharp.nativeassets.linux/' \
             ./artifacts/nuget-cache-x64-runner/ \
             ./nuget-cache/
 
