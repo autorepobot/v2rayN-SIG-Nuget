@@ -258,6 +258,7 @@ jobs:
             local VERSION="$2"
             local OFFICIAL_NUPKG="$3"
             local PPC_NUPKG="$4"
+            local TARGET_FILE="$5"
 
             local WORK_DIR
             local OFFICIAL_DIR
@@ -289,6 +290,9 @@ jobs:
               "$PPC_NUPKG" \
               -d "$PPC_DIR"
 
+            # -----------------------------------------------------
+            # 1. 替换 PPC64LE runtime 原生文件
+            # -----------------------------------------------------
             test -d "$PPC_DIR/runtimes/linux-ppc64le"
 
             rm -rf \
@@ -304,6 +308,52 @@ jobs:
             test -d \
               "$OFFICIAL_DIR/runtimes/linux-ppc64le"
 
+            # -----------------------------------------------------
+            # 2. 替换 PPC64LE 专用 targets
+            #
+            # 不写死 net48 / net462。
+            # 直接扫描 PPC 包中的：
+            #
+            #   build/net*/<TARGET_FILE>
+            #   buildTransitive/net*/<TARGET_FILE>
+            #
+            # 然后覆盖官方包中的对应文件。
+            # -----------------------------------------------------
+            for TARGET_ROOT in build buildTransitive; do
+              if [ -d "$PPC_DIR/$TARGET_ROOT" ]; then
+                while IFS= read -r PPC_TARGET; do
+                  REL_PATH="${PPC_TARGET#"$PPC_DIR/"}"
+                  TARGET_DEST="$OFFICIAL_DIR/$REL_PATH"
+
+                  echo "==> 替换 PPC64LE target:"
+                  echo "    $REL_PATH"
+
+                  mkdir -p "$(dirname "$TARGET_DEST")"
+                  cp -f "$PPC_TARGET" "$TARGET_DEST"
+                done < <(
+                  find "$PPC_DIR/$TARGET_ROOT" \
+                    -type f \
+                    -path "$PPC_DIR/$TARGET_ROOT/net*/$TARGET_FILE" \
+                    -print
+                )
+              fi
+            done
+
+            # -----------------------------------------------------
+            # 3. 验证 PPC64LE targets 已经进入最终包目录
+            # -----------------------------------------------------
+            echo "==> Final $PACKAGE_ID targets:"
+
+            find "$OFFICIAL_DIR/build" \
+              -type f \
+              -path "$OFFICIAL_DIR/build/net*/$TARGET_FILE" \
+              -print 2>/dev/null || true
+
+            find "$OFFICIAL_DIR/buildTransitive" \
+              -type f \
+              -path "$OFFICIAL_DIR/buildTransitive/net*/$TARGET_FILE" \
+              -print 2>/dev/null || true
+
             MERGED_NUPKG="/tmp/merged-nupkgs/$(basename "$OFFICIAL_NUPKG")"
 
             (
@@ -315,6 +365,10 @@ jobs:
 
             unzip -l "$MERGED_NUPKG" |
               grep -q 'runtimes/linux-ppc64le/'
+
+            # 验证最终 nupkg 中至少存在对应 targets
+            unzip -l "$MERGED_NUPKG" |
+              grep -Eq "(build|buildTransitive)/net[^/]*/${TARGET_FILE}"
 
             CACHE_DIR="./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
 
@@ -328,13 +382,15 @@ jobs:
             "skiasharp.nativeassets.linux" \
             "$SKIA_VER" \
             "/tmp/official-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
-            "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg"
+            "/tmp/ppc-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
+            "SkiaSharp.NativeAssets.Linux.targets"
 
           merge_native_package \
             "harfbuzzsharp.nativeassets.linux" \
             "$HARF_VER" \
             "/tmp/official-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
-            "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg"
+            "/tmp/ppc-nupkgs/HarfBuzzSharp.NativeAssets.Linux.${HARF_VER}.nupkg" \
+            "HarfBuzzSharp.NativeAssets.Linux.targets"
 
           cp \
             "/tmp/merged-nupkgs/SkiaSharp.NativeAssets.Linux.${SKIA_VER}.nupkg" \
