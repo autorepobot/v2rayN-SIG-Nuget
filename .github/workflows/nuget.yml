@@ -277,6 +277,10 @@ jobs:
               "$OFFICIAL_NUPKG" \
               -d "$OFFICIAL_DIR"
 
+            rm -f \
+              "$OFFICIAL_DIR"/*.signature.p7s \
+              "$OFFICIAL_DIR/package/services/metadata/signatures.xml"
+
             unzip -q \
               "$PPC_NUPKG" \
               -d "$PPC_DIR"
