@@ -186,54 +186,34 @@ jobs:
           done < /tmp/sdk-versions.txt
 
       # ---------------------------------------------------------
-      # RISC-V64：使用 ARM64 SDK + 预构建 RISC-V NuGet 包
+      # RISC-V64：直接使用 ARM64 SDK + GitHub Release 提供的 RISC-V NuGet 包
       # ---------------------------------------------------------
-      - name: Restore riscv64 using prebuilt NuGet packages
+      - name: Restore linux-riscv64 using GitHub RISC-V packages
         run: |
           set -euo pipefail
 
-          RISCV_SDK_VER="10.0.111"
+          RISCV_VER="10.0.111"
+          RTM_VER="${RISCV_VER%.*}.$(( ${RISCV_VER##*.} - 100 ))"
 
-          # .NET SDK feature band -> RISC-V NuGet package version
-          # 10.0.111 -> 10.0.11
-          # 10.0.110 -> 10.0.10
-          # 10.0.109 -> 10.0.09
-          RISCV_PATCH=$((10#${RISCV_SDK_VER##*.} - 100))
-          RISCV_NUPKG_VER="${RISCV_SDK_VER%.*}.$(printf '%02d' "$RISCV_PATCH")"
-
-          FEED="/tmp/local-feed-riscv"
-          mkdir -p "$FEED"
-
-          echo "==> RISC-V SDK version: $RISCV_SDK_VER"
-          echo "==> RISC-V NuGet package version: $RISCV_NUPKG_VER"
+          mkdir -p /tmp/local-feed-riscv
 
           curl -fL \
-            -o "$FEED/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
+            -o "/tmp/local-feed-riscv/microsoft.aspnetcore.app.runtime.linux-riscv64.${RTM_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
 
           curl -fL \
-            -o "$FEED/Microsoft.NETCore.App.Host.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
+            -o "/tmp/local-feed-riscv/microsoft.netcore.app.host.linux-riscv64.${RTM_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.NETCore.App.Host.linux-riscv64.${RTM_VER}.nupkg"
 
           curl -fL \
-            -o "$FEED/Microsoft.NETCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RISCV_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RISCV_NUPKG_VER}.nupkg"
+            -o "/tmp/local-feed-riscv/microsoft.netcore.app.runtime.linux-riscv64.${RTM_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
 
-          echo "Downloaded RISC-V64 NuGet packages:"
-          ls -lh "$FEED"
-
-          # 使用 ARM64 Runner 上已经安装好的 .NET SDK 注册本地源
-          /tmp/sdks/sdk1/dotnet nuget add source \
-            "$FEED" \
-            -n local-riscv \
-            --protocol-version 3 \
-            || true
-
-          echo "==> Restoring linux-riscv64 using ARM64 SDK $RISCV_SDK_VER..."
-          /tmp/sdks/sdk1/dotnet restore source/v2rayN/v2rayN.sln \
+          /tmp/sdks/sdk1/dotnet restore \
+            source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
-            --source local-riscv \
             --source /tmp/local-feed-skia \
+            --source /tmp/local-feed-riscv \
             --source https://api.nuget.org/v3/index.json \
             -r linux-riscv64 \
             -p:EnableWindowsTargeting=true \
