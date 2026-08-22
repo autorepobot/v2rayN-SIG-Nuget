@@ -166,7 +166,7 @@ jobs:
 
             BUILD_DIR=$(mktemp -d)
 
-            # 3. 重点：通过 cp -rL 将软链接指向的 shared/ 实体二进制文件彻底“解绑/复制”进来
+            # 3. 重点：通过 cp -rL 将软链接指向的 shared/ 实体文件彻底“解绑/复制”进来
             cp -rL "$pack_ver_dir"/* "$BUILD_DIR/"
 
             echo '<?xml version="1.0" encoding="utf-8"?>
@@ -409,6 +409,20 @@ jobs:
             ./artifacts/nuget-cache-arm64-runner/ \
             ./nuget-cache/
 
+          echo "ARM64 SkiaSharp cache:"
+          find \
+            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux \
+            -mindepth 1 \
+            -maxdepth 2 \
+            -print
+
+          echo "ARM64 HarfBuzzSharp cache:"
+          find \
+            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux \
+            -mindepth 1 \
+            -maxdepth 2 \
+            -print
+
           SKIA_DIR=$(find \
             ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux \
             -mindepth 1 \
@@ -424,6 +438,9 @@ jobs:
             -type d \
             -print \
             -quit)
+
+          echo "SKIA_DIR=$SKIA_DIR"
+          echo "HARF_DIR=$HARF_DIR"
 
           test -n "$SKIA_DIR"
           test -n "$HARF_DIR"
