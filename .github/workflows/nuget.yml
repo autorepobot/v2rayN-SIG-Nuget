@@ -369,6 +369,53 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-ppc64le restore 部分失败"
 
+      - name: Validate SkiaSharp and HarfBuzzSharp versions
+        run: |
+          set -euo pipefail
+
+          SKIA_ROOT="./nuget-cache-arm/skiasharp.nativeassets.linux"
+          HARF_ROOT="./nuget-cache-arm/harfbuzzsharp.nativeassets.linux"
+
+          SKIA_VERSIONS=$(find \
+            "$SKIA_ROOT" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf '%f\n' |
+            sort -V)
+
+          HARF_VERSIONS=$(find \
+            "$HARF_ROOT" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf '%f\n' |
+            sort -V)
+
+          echo "SkiaSharp versions:"
+          printf '%s\n' "$SKIA_VERSIONS"
+
+          echo "HarfBuzzSharp versions:"
+          printf '%s\n' "$HARF_VERSIONS"
+
+          SKIA_COUNT=$(printf '%s\n' "$SKIA_VERSIONS" | sed '/^$/d' | wc -l)
+          HARF_COUNT=$(printf '%s\n' "$HARF_VERSIONS" | sed '/^$/d' | wc -l)
+
+          echo "SkiaSharp version count: $SKIA_COUNT"
+          echo "HarfBuzzSharp version count: $HARF_COUNT"
+
+          if [ "$SKIA_COUNT" -gt 1 ]; then
+            echo "ERROR: Multiple SkiaSharp.NativeAssets.Linux versions detected:"
+            printf '%s\n' "$SKIA_VERSIONS"
+            exit 1
+          fi
+
+          if [ "$HARF_COUNT" -gt 1 ]; then
+            echo "ERROR: Multiple HarfBuzzSharp.NativeAssets.Linux versions detected:"
+            printf '%s\n' "$HARF_VERSIONS"
+            exit 1
+          fi
+
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v6
         with:
@@ -534,7 +581,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}GitHub.com/${{ github.repository }}.git" \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@GitHub.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
