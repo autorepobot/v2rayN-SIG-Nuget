@@ -263,6 +263,7 @@ jobs:
             local OFFICIAL_DIR
             local PPC_DIR
             local MERGED_NUPKG
+            local CACHE_DIR
 
             WORK_DIR=$(mktemp -d)
             OFFICIAL_DIR="$WORK_DIR/official"
@@ -307,8 +308,9 @@ jobs:
             unzip -l "$MERGED_NUPKG" |
               grep -q 'runtimes/linux-ppc64le/'
 
-            rm -rf \
-              "./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
+            CACHE_DIR="./nuget-cache-arm/${PACKAGE_ID}/${VERSION}"
+
+            rm -rf "$CACHE_DIR"
 
             rm -rf \
               "$WORK_DIR"
@@ -392,49 +394,74 @@ jobs:
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
           rsync -a \
-            --exclude='skiasharp.nativeassets.linux/3.119.4/***' \
-            --exclude='harfbuzzsharp.nativeassets.linux/8.3.1.5/***' \
+            --exclude='skiasharp.nativeassets.linux/***' \
+            --exclude='harfbuzzsharp.nativeassets.linux/***' \
             ./artifacts/nuget-cache-arm64-runner/ \
             ./nuget-cache/
 
+          SKIA_DIR=$(find \
+            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -print \
+            -quit)
+
+          HARF_DIR=$(find \
+            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -print \
+            -quit)
+
+          test -n "$SKIA_DIR"
+          test -n "$HARF_DIR"
+
+          SKIA_VERSION=$(basename "$SKIA_DIR")
+          HARF_VERSION=$(basename "$HARF_DIR")
+
           rm -rf \
-            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5
+            ./nuget-cache/skiasharp.nativeassets.linux \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux
 
           mkdir -p \
             ./nuget-cache/skiasharp.nativeassets.linux \
             ./nuget-cache/harfbuzzsharp.nativeassets.linux
 
           cp -a \
-            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux/3.119.4 \
+            "$SKIA_DIR" \
             ./nuget-cache/skiasharp.nativeassets.linux/
 
           cp -a \
-            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
+            "$HARF_DIR" \
             ./nuget-cache/harfbuzzsharp.nativeassets.linux/
 
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
 
-          test -d \
-            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4/runtimes/linux-ppc64le
+          SKIA_CACHE_DIR="$SKIA_DIR"
+          HARF_CACHE_DIR="$HARF_DIR"
 
           test -d \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5/runtimes/linux-ppc64le
+            "$SKIA_CACHE_DIR/runtimes/linux-ppc64le"
+
+          test -d \
+            "$HARF_CACHE_DIR/runtimes/linux-ppc64le"
 
           SKIA_NUPKG=$(find \
-            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
+            "$SKIA_CACHE_DIR" \
             -maxdepth 1 \
             -type f \
-            -name 'SkiaSharp.NativeAssets.Linux.3.119.4.nupkg' \
+            -name '*.nupkg' \
             -print \
             -quit)
 
           HARF_NUPKG=$(find \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
+            "$HARF_CACHE_DIR" \
             -maxdepth 1 \
             -type f \
-            -name 'HarfBuzzSharp.NativeAssets.Linux.8.3.1.5.nupkg' \
+            -name '*.nupkg' \
             -print \
             -quit)
 
@@ -448,14 +475,14 @@ jobs:
             grep -q 'runtimes/linux-ppc64le/'
 
           SKIA_NUPKG_COUNT=$(find \
-            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
+            "$SKIA_CACHE_DIR" \
             -maxdepth 1 \
             -type f \
             -name '*.nupkg' |
             wc -l)
 
           HARF_NUPKG_COUNT=$(find \
-            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
+            "$HARF_CACHE_DIR" \
             -maxdepth 1 \
             -type f \
             -name '*.nupkg' |
@@ -464,6 +491,8 @@ jobs:
           test "$SKIA_NUPKG_COUNT" -eq 1
           test "$HARF_NUPKG_COUNT" -eq 1
 
+          echo "SkiaSharp version: $SKIA_VERSION"
+          echo "HarfBuzzSharp version: $HARF_VERSION"
           echo "SkiaSharp nupkg count: $SKIA_NUPKG_COUNT"
           echo "HarfBuzzSharp nupkg count: $HARF_NUPKG_COUNT"
 
