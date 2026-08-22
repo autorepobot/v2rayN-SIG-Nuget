@@ -386,38 +386,31 @@ jobs:
           mkdir -p ./nuget-cache
 
           echo "合并 x64-runner 产物 (arm64 缓存)..."
-          cp -a \
-            ./artifacts/nuget-cache-x64-runner/. \
+          rsync -a \
+            ./artifacts/nuget-cache-x64-runner/ \
             ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
+          rsync -a \
+            --exclude='skiasharp.nativeassets.linux/3.119.4/***' \
+            --exclude='harfbuzzsharp.nativeassets.linux/8.3.1.5/***' \
+            ./artifacts/nuget-cache-arm64-runner/ \
+            ./nuget-cache/
 
-          find ./artifacts/nuget-cache-arm64-runner \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d |
-          while read -r package_dir; do
-            PACKAGE_NAME=$(basename "$package_dir")
+          rm -rf \
+            ./nuget-cache/skiasharp.nativeassets.linux/3.119.4 \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux/8.3.1.5
 
-            if [[ "$PACKAGE_NAME" == "skiasharp.nativeassets.linux" ]]; then
-              continue
-            fi
-
-            if [[ "$PACKAGE_NAME" == "harfbuzzsharp.nativeassets.linux" ]]; then
-              continue
-            fi
-
-            cp -a \
-              "$package_dir" \
-              ./nuget-cache/
-          done
+          mkdir -p \
+            ./nuget-cache/skiasharp.nativeassets.linux \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux
 
           cp -a \
-            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux/. \
+            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux/3.119.4 \
             ./nuget-cache/skiasharp.nativeassets.linux/
 
           cp -a \
-            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux/. \
+            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux/8.3.1.5 \
             ./nuget-cache/harfbuzzsharp.nativeassets.linux/
 
           find ./nuget-cache -name "*.lock" -delete
