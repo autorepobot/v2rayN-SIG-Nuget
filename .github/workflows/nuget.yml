@@ -391,9 +391,34 @@ jobs:
             ./nuget-cache/
 
           echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
+
+          find ./artifacts/nuget-cache-arm64-runner \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d |
+          while read -r package_dir; do
+            PACKAGE_NAME=$(basename "$package_dir")
+
+            if [[ "$PACKAGE_NAME" == "skiasharp.nativeassets.linux" ]]; then
+              continue
+            fi
+
+            if [[ "$PACKAGE_NAME" == "harfbuzzsharp.nativeassets.linux" ]]; then
+              continue
+            fi
+
+            cp -a \
+              "$package_dir" \
+              ./nuget-cache/
+          done
+
           cp -a \
-            ./artifacts/nuget-cache-arm64-runner/. \
-            ./nuget-cache/
+            ./artifacts/nuget-cache-arm64-runner/skiasharp.nativeassets.linux/. \
+            ./nuget-cache/skiasharp.nativeassets.linux/
+
+          cp -a \
+            ./artifacts/nuget-cache-arm64-runner/harfbuzzsharp.nativeassets.linux/. \
+            ./nuget-cache/harfbuzzsharp.nativeassets.linux/
 
           find ./nuget-cache -name "*.lock" -delete
           find ./nuget-cache -name "*.tmp" -delete
