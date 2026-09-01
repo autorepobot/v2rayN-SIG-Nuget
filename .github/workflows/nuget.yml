@@ -345,6 +345,7 @@ jobs:
             --source /tmp/local-feed-x86 \
             --source https://api.nuget.org/v3/index.json \
             -r linux-x86 \
+            -p:SelfContained=true \
             -p:EnableWindowsTargeting=true \
             --force-evaluate \
             --ignore-failed-sources || echo "警告: linux-x86 restore 部分失败"
