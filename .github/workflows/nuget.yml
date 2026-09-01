@@ -225,7 +225,7 @@ jobs:
       - name: Restore loongarch64 using Loongson NuGet source
         run: |
           LOONG_VER="10.0.111"
-          LOONG_NUPKG_VER="10.0.10"
+          LOONG_NUPKG_VER="${LOONG_VER%.*}.$(( ${LOONG_VER##*.} - 100 ))"
 
           mkdir -p "/tmp/sdks/sdk-loong"
           ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/sdk-loong"
@@ -306,6 +306,48 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-ppc64le restore 部分失败"
 
+      # ---------------------------------------------------------
+      # x86：直接使用 GitHub Release 提供的 .NET x86 NuGet 包
+      # ---------------------------------------------------------
+      - name: Restore linux-x86 using GitHub x86 NuGet packages
+        run: |
+          set -euo pipefail
+
+          X86_SDK_VER="10.0.111"
+          X86_NUPKG_VER="${X86_SDK_VER%.*}.$(( ${X86_SDK_VER##*.} - 100 ))"
+
+          mkdir -p /tmp/local-feed-x86
+
+          curl -fL \
+            -o "/tmp/local-feed-x86/Microsoft.AspNetCore.App.Runtime.linux-x86.${X86_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${X86_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-x86.${X86_NUPKG_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/local-feed-x86/Microsoft.NETCore.App.Host.linux-x86.${X86_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${X86_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-x86.${X86_NUPKG_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/local-feed-x86/Microsoft.NETCore.App.Runtime.linux-x86.${X86_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${X86_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-x86.${X86_NUPKG_VER}.nupkg"
+
+          echo "Downloaded Linux x86 local NuGet packages:"
+          ls -lh "/tmp/local-feed-x86"
+
+          ./dotnet-install.sh \
+            --version "$X86_SDK_VER" \
+            --install-dir "/tmp/sdks/sdk-x86"
+
+          echo "==> Restoring linux-x86 with SDK $X86_SDK_VER from local feeds..."
+          "/tmp/sdks/sdk-x86/dotnet" restore \
+            source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-arm \
+            --source /tmp/local-feed-skia \
+            --source /tmp/local-feed-x86 \
+            --source https://api.nuget.org/v3/index.json \
+            -r linux-x86 \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || echo "警告: linux-x86 restore 部分失败"
+
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v6
         with:
@@ -337,7 +379,7 @@ jobs:
             ./artifacts/nuget-cache-x64-runner/ \
             ./nuget-cache/
 
-          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le 缓存)..."
+          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le, x86 缓存)..."
           rsync -av \
             ./artifacts/nuget-cache-arm64-runner/ \
             ./nuget-cache/
