@@ -199,15 +199,15 @@ jobs:
 
           curl -fL \
             -o "/tmp/local-feed-riscv/microsoft.aspnetcore.app.runtime.linux-riscv64.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${RTM_VER}/Microsoft.AspNetCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-riscv/microsoft.netcore.app.host.linux-riscv64.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.NETCore.App.Host.linux-riscv64.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${RTM_VER}/Microsoft.NETCore.App.Host.linux-riscv64.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-riscv/microsoft.netcore.app.runtime.linux-riscv64.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${RTM_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${RTM_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
 
           /tmp/sdks/sdk1/dotnet restore \
             source/v2rayN/v2rayN.sln \
@@ -234,19 +234,19 @@ jobs:
 
           curl -fL \
             -o "/tmp/local-feed-loong/Microsoft.AspNetCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${LOONG_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Host.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Runtime.NativeAOT.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.NativeAOT.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.NativeAOT.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
 
           echo "Downloaded LoongArch64 local NuGet packages:"
           ls -lh "/tmp/local-feed-loong"
@@ -282,15 +282,15 @@ jobs:
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.netcore.app.host.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.netcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/IBM/dotnet-s390x/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
 
           ./dotnet-install.sh \
             --version "$PPC_VER" \
