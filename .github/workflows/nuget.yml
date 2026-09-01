@@ -391,7 +391,7 @@ jobs:
 
       - name: Compress NuGet cache
         run: |
-          XZ_OPT="-9 -T0" tar -cJf nuget-cache.tar.xz nuget-cache
+          XZ_OPT="-9e -T0" tar -cJf nuget-cache.tar.xz nuget-cache
 
       - name: Create Release with cache
         env:
