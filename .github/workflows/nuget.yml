@@ -337,26 +337,22 @@ jobs:
             --version "$X86_SDK_VER" \
             --install-dir "/tmp/sdks/sdk-x86"
 
-          # 修改 SDK 内置 RuntimePackRuntimeIdentifiers，让 SDK 认可 linux-x86
+          # 修改 SDK 内置 RuntimePackRuntimeIdentifiers 和 AppHostRuntimeIdentifiers，让 SDK 认可 linux-x86
           SDK_PROPS="/tmp/sdks/sdk-x86/sdk/${X86_SDK_VER}/Microsoft.NETCoreSdk.BundledVersions.props"
 
           echo "Patching $SDK_PROPS ..."
 
-          python3 - "$SDK_PROPS" <<'PY'
+          python3 - "$SDK_PROPS" <<'PY2'
           import sys
           from pathlib import Path
 
           path = Path(sys.argv[1])
           text = path.read_text()
-
           old = text
 
-          for framework in (
-              "Microsoft.NETCore.App",
-              "Microsoft.AspNetCore.App",
-          ):
-              marker = f'<KnownFrameworkReference Include="{framework}"'
+          def append_identifier(text, marker, attr):
               start = 0
+              changed = False
 
               while True:
                   start = text.find(marker, start)
@@ -368,8 +364,6 @@ jobs:
                       break
 
                   block = text[start:end]
-
-                  attr = 'RuntimePackRuntimeIdentifiers="'
                   attr_pos = block.find(attr)
 
                   if attr_pos != -1:
@@ -393,21 +387,96 @@ jobs:
                                   + text[end:]
                               )
 
-                              end += len(new_value) - len(value)
+                              end = start + len(block)
+                              changed = True
 
                   start = end + 2
 
+              return text, changed
+
+          # ---------------------------------------------------------
+          # 1. KnownFrameworkReference:
+          #    RuntimePackRuntimeIdentifiers += linux-x86
+          # ---------------------------------------------------------
+          for framework in (
+              "Microsoft.NETCore.App",
+              "Microsoft.AspNetCore.App",
+          ):
+              marker = f'<KnownFrameworkReference Include="{framework}"'
+              text, _ = append_identifier(
+                  text,
+                  marker,
+                  'RuntimePackRuntimeIdentifiers="',
+              )
+
+          # ---------------------------------------------------------
+          # 2. KnownAppHostPack:
+          #    AppHostRuntimeIdentifiers += linux-x86
+          # ---------------------------------------------------------
+          start = 0
+          apphost_changed = False
+
+          while True:
+              start = text.find('<KnownAppHostPack', start)
+              if start == -1:
+                  break
+
+              end = text.find("/>", start)
+              if end == -1:
+                  break
+
+              block = text[start:end]
+
+              if (
+                  'Include="Microsoft.NETCore.App"' in block
+                  or 'Update="Microsoft.NETCore.App"' in block
+              ):
+                  attr = 'AppHostRuntimeIdentifiers="'
+                  attr_pos = block.find(attr)
+
+                  if attr_pos != -1:
+                      value_start = attr_pos + len(attr)
+                      value_end = block.find('"', value_start)
+
+                      if value_end != -1:
+                          value = block[value_start:value_end]
+
+                          if "linux-x86" not in value.split(";"):
+                              new_value = value + ";linux-x86"
+                              block = (
+                                  block[:value_start]
+                                  + new_value
+                                  + block[value_end:]
+                              )
+
+                              text = (
+                                  text[:start]
+                                  + block
+                                  + text[end:]
+                              )
+
+                              end = start + len(block)
+                              apphost_changed = True
+
+              start = end + 2
+
           if text == old:
               raise SystemExit(
-                  "ERROR: No RuntimePackRuntimeIdentifiers entry was patched"
+                  "ERROR: No RuntimePackRuntimeIdentifiers or AppHostRuntimeIdentifiers entry was patched"
               )
 
           path.write_text(text)
-          PY
+          PY2
 
-          echo "===== Verify linux-x86 is now present in SDK ====="
+          echo "===== Verify linux-x86 is now present in RuntimePackRuntimeIdentifiers ====="
           grep -n \
             'RuntimePackRuntimeIdentifiers=' \
+            "$SDK_PROPS" \
+            | grep 'linux-x86'
+
+          echo "===== Verify linux-x86 is now present in AppHostRuntimeIdentifiers ====="
+          grep -n \
+            'AppHostRuntimeIdentifiers=' \
             "$SDK_PROPS" \
             | grep 'linux-x86'
 
