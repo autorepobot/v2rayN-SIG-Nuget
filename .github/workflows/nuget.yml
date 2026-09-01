@@ -338,7 +338,7 @@ jobs:
             --install-dir "/tmp/sdks/sdk-x86"
 
           # 修改 SDK 内置 RuntimePackRuntimeIdentifiers，让 SDK 认可 linux-x86
-          SDK_PROPS="/tmp/sdks/sdk-x86/sdk/Microsoft.NETCoreSdk.BundledVersions.props"
+          SDK_PROPS="/tmp/sdks/sdk-x86/sdk/${X86_SDK_VER}/Microsoft.NETCoreSdk.BundledVersions.props"
 
           echo "Patching $SDK_PROPS ..."
 
