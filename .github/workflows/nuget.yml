@@ -337,6 +337,22 @@ jobs:
             --version "$X86_SDK_VER" \
             --install-dir "/tmp/sdks/sdk-x86"
 
+          # ---- 诊断：确认 SDK 内置映射表里到底有没有 linux-x86 这条 KnownRuntimePack ----
+          echo "===== 检查 SDK 内置 KnownFrameworkReference/KnownRuntimePack 映射 ====="
+          PROPS_FILE=$(find /tmp/sdks/sdk-x86/sdk -maxdepth 1 -name "Microsoft.NETCoreSdk.BundledVersions.props" -print -quit)
+          if [ -z "$PROPS_FILE" ]; then
+            PROPS_FILE=$(find /tmp/sdks/sdk-x86/sdk -mindepth 2 -maxdepth 2 -name "Microsoft.NETCoreSdk.BundledVersions.props" -print -quit)
+          fi
+          echo "props 文件路径: ${PROPS_FILE:-未找到}"
+          if [ -n "$PROPS_FILE" ]; then
+            grep -A3 -i 'AspNetCore.App' "$PROPS_FILE" | grep -i x86 \
+              && echo "==> SDK 认可 linux-x86 的 AspNetCore RuntimePack" \
+              || echo "==> SDK 映射表里没有 linux-x86 对应的 AspNetCore RuntimePack（预期结果，因为这是 Mono 专属包）"
+          else
+            echo "警告: 未找到 props 文件，无法诊断"
+          fi
+          # ---------------------------------------------------------------------
+
           echo "==> Restoring linux-x86 with SDK $X86_SDK_VER from local feeds..."
           "/tmp/sdks/sdk-x86/dotnet" restore \
             source/v2rayN/v2rayN.sln \
