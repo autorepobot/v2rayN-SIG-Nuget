@@ -282,15 +282,15 @@ jobs:
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.aspnetcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${PPC_VER}/Microsoft.AspNetCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.netcore.app.host.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${PPC_VER}/Microsoft.NETCore.App.Host.linux-ppc64le.${RTM_VER}.nupkg"
 
           curl -fL \
             -o "/tmp/local-feed-ppc/microsoft.netcore.app.runtime.linux-ppc64le.${RTM_VER}.nupkg" \
-            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/v${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
+            "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${PPC_VER}/Microsoft.NETCore.App.Runtime.linux-ppc64le.${RTM_VER}.nupkg"
 
           ./dotnet-install.sh \
             --version "$PPC_VER" \
