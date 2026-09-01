@@ -220,14 +220,36 @@ jobs:
             --ignore-failed-sources || echo "警告: linux-riscv64 restore 部分失败"
 
       # ---------------------------------------------------------
-      # LoongArch64：配置龙芯源 + 匹配对应版 ARM64 SDK 直接 Restore
+      # LoongArch64：配置龙芯源 + GitHub RISC-V/LoongArch NuGet 本地源
       # ---------------------------------------------------------
       - name: Restore loongarch64 using Loongson NuGet source
         run: |
           LOONG_VER="10.0.111"
+          LOONG_NUPKG_VER="10.0.10"
 
           mkdir -p "/tmp/sdks/sdk-loong"
           ./dotnet-install.sh --version "$LOONG_VER" --install-dir "/tmp/sdks/sdk-loong"
+
+          mkdir -p "/tmp/local-feed-loong"
+
+          curl -fL \
+            -o "/tmp/local-feed-loong/Microsoft.AspNetCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.AspNetCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Host.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Host.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+
+          curl -fL \
+            -o "/tmp/local-feed-loong/Microsoft.NETCore.App.Runtime.NativeAOT.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg" \
+            "https://github.com/autorepobot/dotnet-nupkg-riscv/releases/download/${LOONG_NUPKG_VER}/Microsoft.NETCore.App.Runtime.NativeAOT.linux-loongarch64.${LOONG_NUPKG_VER}.nupkg"
+
+          echo "Downloaded LoongArch64 local NuGet packages:"
+          ls -lh "/tmp/local-feed-loong"
 
           "/tmp/sdks/sdk-loong/dotnet" nuget add source \
             "https://lnuget.loongnix.cn/v3/index.json" \
@@ -235,10 +257,11 @@ jobs:
             --protocol-version 3 \
             --allow-insecure-connections || true
 
-          echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from Loongson feed..."
+          echo "==> Restoring linux-loongarch64 with SDK $LOONG_VER from local + Loongson feeds..."
           "/tmp/sdks/sdk-loong/dotnet" restore source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
             --source /tmp/local-feed-skia \
+            --source /tmp/local-feed-loong \
             --source https://lnuget.loongnix.cn/v3/index.json \
             --source https://api.nuget.org/v3/index.json \
             -r linux-loongarch64 \
