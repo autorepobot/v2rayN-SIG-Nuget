@@ -192,7 +192,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          RISCV_VER="10.0.111"
+          RISCV_VER="10.0.112"
           RTM_VER="${RISCV_VER%.*}.$(( ${RISCV_VER##*.} - 100 ))"
 
           mkdir -p /tmp/local-feed-riscv
@@ -224,7 +224,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Restore loongarch64 using Loongson NuGet source
         run: |
-          LOONG_VER="10.0.111"
+          LOONG_VER="10.0.112"
           LOONG_NUPKG_VER="${LOONG_VER%.*}.$(( ${LOONG_VER##*.} - 100 ))"
 
           mkdir -p "/tmp/sdks/sdk-loong"
@@ -275,7 +275,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          PPC_VER="10.0.111"
+          PPC_VER="10.0.112"
           RTM_VER="${PPC_VER%.*}.$(( ${PPC_VER##*.} - 100 ))"
 
           mkdir -p /tmp/local-feed-ppc
@@ -313,7 +313,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          X86_SDK_VER="10.0.111"
+          X86_SDK_VER="10.0.112"
           X86_NUPKG_VER="${X86_SDK_VER%.*}.$(( ${X86_SDK_VER##*.} - 100 ))"
 
           mkdir -p /tmp/local-feed-x86
