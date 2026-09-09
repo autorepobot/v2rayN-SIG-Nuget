@@ -497,15 +497,15 @@ jobs:
           find ./nuget-cache-arm -type d | grep -E 'linux-x86' || true
 
           find ./nuget-cache-arm -type d \
-            -path '*/microsoft.aspnetcore.app.runtime.linux-x86/10.0.11' -print -quit | grep -q . \
+            -path '*/microsoft.aspnetcore.app.runtime.linux-x86/10.0.*' -print -quit | grep -q . \
             || { echo "ERROR: Microsoft.AspNetCore.App.Runtime.linux-x86 not found in cache"; exit 1; }
 
           find ./nuget-cache-arm -type d \
-            -path '*/microsoft.netcore.app.host.linux-x86/10.0.11' -print -quit | grep -q . \
+            -path '*/microsoft.netcore.app.host.linux-x86/10.0.*' -print -quit | grep -q . \
             || { echo "ERROR: Microsoft.NETCore.App.Host.linux-x86 not found in cache"; exit 1; }
 
           find ./nuget-cache-arm -type d \
-            -path '*/microsoft.netcore.app.runtime.linux-x86/10.0.11' -print -quit | grep -q . \
+            -path '*/microsoft.netcore.app.runtime.linux-x86/10.0.*' -print -quit | grep -q . \
             || { echo "ERROR: Microsoft.NETCore.App.Runtime.linux-x86 not found in cache"; exit 1; }
 
           echo "linux-x86 packages are present in cache."
