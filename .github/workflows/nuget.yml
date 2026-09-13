@@ -40,23 +40,18 @@ jobs:
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
 
-      - name: Install latest two 10.0.1xx SDK patch versions
+      - name: Install latest 10.0.1xx SDK patch version
         run: |
           curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
           chmod +x dotnet-install.sh
 
-          mkdir -p /tmp/sdks/sdk1
-          ./dotnet-install.sh --channel "10.0.1xx" --install-dir /tmp/sdks/sdk1
-          LATEST=$(/tmp/sdks/sdk1/dotnet --version)
+          mkdir -p /tmp/sdks/sdk
+          ./dotnet-install.sh \
+            --channel "10.0.1xx" \
+            --install-dir /tmp/sdks/sdk
 
-          MAJOR_MINOR=$(echo "$LATEST" | cut -d. -f1,2)
-          PATCH=$(echo "$LATEST" | cut -d. -f3)
-          PREV="$MAJOR_MINOR.$((PATCH - 1))"
-
-          mkdir -p /tmp/sdks/sdk2
-          ./dotnet-install.sh --version "$PREV" --install-dir /tmp/sdks/sdk2
-
-          printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
+          echo "Installed SDK:"
+          /tmp/sdks/sdk/dotnet --version
 
       - name: Download SkiaSharp and HarfBuzzSharp packages from GitHub Release
         run: |
@@ -82,19 +77,18 @@ jobs:
 
       - name: Restore linux-arm64 ONLY
         run: |
-          i=0
-          while read -r VER; do
-            i=$((i+1))
-            SDK_DIR="/tmp/sdks/sdk$i"
-            echo "==> [x64 Runner] Restoring linux-arm64 with SDK $VER"
-            "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
-              --packages ./nuget-cache-x64 \
-              --source /tmp/local-feed-skia \
-              --source https://api.nuget.org/v3/index.json \
-              -r linux-arm64 \
-              -p:EnableWindowsTargeting=true \
-              --ignore-failed-sources || true
-          done < /tmp/sdk-versions.txt
+          SDK_DIR="/tmp/sdks/sdk"
+          SDK_VER="$("$SDK_DIR/dotnet" --version)"
+
+          echo "==> [x64 Runner] Restoring linux-arm64 with SDK $SDK_VER"
+
+          "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-x64 \
+            --source /tmp/local-feed-skia \
+            --source https://api.nuget.org/v3/index.json \
+            -r linux-arm64 \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || true
 
       - name: Upload x64 runner cache artifact
         uses: actions/upload-artifact@v6
@@ -129,23 +123,18 @@ jobs:
           git clone --branch "${{ inputs.source_ref }}" --depth 1 --recurse-submodules \
             https://github.com/autorepobot/v2rayN-SIG.git source
 
-      - name: Install latest two 10.0.1xx SDK patch versions
+      - name: Install latest 10.0.1xx SDK patch version
         run: |
           curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
           chmod +x dotnet-install.sh
 
-          mkdir -p /tmp/sdks/sdk1
-          ./dotnet-install.sh --channel "10.0.1xx" --install-dir /tmp/sdks/sdk1
-          LATEST=$(/tmp/sdks/sdk1/dotnet --version)
+          mkdir -p /tmp/sdks/sdk
+          ./dotnet-install.sh \
+            --channel "10.0.1xx" \
+            --install-dir /tmp/sdks/sdk
 
-          MAJOR_MINOR=$(echo "$LATEST" | cut -d. -f1,2)
-          PATCH=$(echo "$LATEST" | cut -d. -f3)
-          PREV="$MAJOR_MINOR.$((PATCH - 1))"
-
-          mkdir -p /tmp/sdks/sdk2
-          ./dotnet-install.sh --version "$PREV" --install-dir /tmp/sdks/sdk2
-
-          printf '%s\n%s\n' "$LATEST" "$PREV" > /tmp/sdk-versions.txt
+          echo "Installed SDK:"
+          /tmp/sdks/sdk/dotnet --version
 
       - name: Download SkiaSharp and HarfBuzzSharp packages from GitHub Release
         run: |
@@ -171,19 +160,18 @@ jobs:
 
       - name: Restore linux-x64
         run: |
-          i=0
-          while read -r VER; do
-            i=$((i+1))
-            SDK_DIR="/tmp/sdks/sdk$i"
-            echo "==> [ARM64 Runner] Restoring linux-x64 with SDK $VER"
-            "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
-              --packages ./nuget-cache-arm \
-              --source /tmp/local-feed-skia \
-              --source https://api.nuget.org/v3/index.json \
-              -r linux-x64 \
-              -p:EnableWindowsTargeting=true \
-              --ignore-failed-sources || true
-          done < /tmp/sdk-versions.txt
+          SDK_DIR="/tmp/sdks/sdk"
+          SDK_VER="$("$SDK_DIR/dotnet" --version)"
+
+          echo "==> [ARM64 Runner] Restoring linux-x64 with SDK $SDK_VER"
+
+          "$SDK_DIR/dotnet" restore source/v2rayN/v2rayN.sln \
+            --packages ./nuget-cache-arm \
+            --source /tmp/local-feed-skia \
+            --source https://api.nuget.org/v3/index.json \
+            -r linux-x64 \
+            -p:EnableWindowsTargeting=true \
+            --ignore-failed-sources || true
 
       # ---------------------------------------------------------
       # RISC-V64：直接使用 ARM64 SDK + GitHub Release 提供的 RISC-V NuGet 包
@@ -553,7 +541,7 @@ jobs:
 
       - name: Compress NuGet cache
         run: |
-          XZ_OPT="-9e -T0 --lzma2=dict=128MiB" tar -cJf nuget-cache.tar.xz nuget-cache
+          XZ_OPT="-T0 --lzma2=preset=9e,dict=128MiB,lc=4,pb=0,depth=512" tar -cJf nuget-cache.tar.xz nuget-cache
 
       - name: Create Release with cache
         env:
