@@ -197,7 +197,7 @@ jobs:
             -o "/tmp/local-feed-riscv/microsoft.netcore.app.runtime.linux-riscv64.${RTM_VER}.nupkg" \
             "https://github.com/autorepobot/dotnet-nupkg-prebuild/releases/download/${RTM_VER}/Microsoft.NETCore.App.Runtime.linux-riscv64.${RTM_VER}.nupkg"
 
-          /tmp/sdks/sdk1/dotnet restore \
+          /tmp/sdks/sdk/dotnet restore \
             source/v2rayN/v2rayN.sln \
             --packages ./nuget-cache-arm \
             --source /tmp/local-feed-skia \
