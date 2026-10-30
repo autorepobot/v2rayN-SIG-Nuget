@@ -173,9 +173,6 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || true
 
-      # ---------------------------------------------------------
-      # RISC-V64：直接使用 ARM64 SDK + GitHub Release 提供的 RISC-V NuGet 包
-      # ---------------------------------------------------------
       - name: Restore linux-riscv64 using GitHub RISC-V packages
         run: |
           set -euo pipefail
@@ -207,9 +204,6 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-riscv64 restore 部分失败"
 
-      # ---------------------------------------------------------
-      # LoongArch64：配置龙芯源 + GitHub RISC-V/LoongArch NuGet 本地源
-      # ---------------------------------------------------------
       - name: Restore loongarch64 using Loongson NuGet source
         run: |
           LOONG_VER="10.0.114"
@@ -256,9 +250,6 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-loongarch64 restore 部分失败"
 
-      # ---------------------------------------------------------
-      # PPC64LE：直接使用 GitHub Release 提供的 SkiaSharp/HarfBuzzSharp
-      # ---------------------------------------------------------
       - name: Restore linux-ppc64le using GitHub SkiaSharp/HarfBuzzSharp packages
         run: |
           set -euo pipefail
@@ -294,9 +285,6 @@ jobs:
             -p:EnableWindowsTargeting=true \
             --ignore-failed-sources || echo "警告: linux-ppc64le restore 部分失败"
 
-      # ---------------------------------------------------------
-      # x86：直接使用 GitHub Release 提供的 .NET x86 NuGet 包
-      # ---------------------------------------------------------
       - name: Restore linux-x86 using GitHub x86 NuGet packages
         run: |
           set -euo pipefail
@@ -325,7 +313,6 @@ jobs:
             --version "$X86_SDK_VER" \
             --install-dir "/tmp/sdks/sdk-x86"
 
-          # 修改 SDK 内置 RuntimePackRuntimeIdentifiers 和 AppHostRuntimeIdentifiers，让 SDK 认可 linux-x86
           SDK_PROPS="/tmp/sdks/sdk-x86/sdk/${X86_SDK_VER}/Microsoft.NETCoreSdk.BundledVersions.props"
 
           echo "Patching $SDK_PROPS ..."
@@ -382,34 +369,11 @@ jobs:
 
               return text, changed
 
-          # ---------------------------------------------------------
-          # 1. KnownFrameworkReference:
-          #    RuntimePackRuntimeIdentifiers += linux-x86
-          # ---------------------------------------------------------
           for framework in (
               "Microsoft.NETCore.App",
               "Microsoft.AspNetCore.App",
           ):
-              marker = f'<KnownFrameworkReference Include="{framework}"'
-              text, _ = append_identifier(
-                  text,
-                  marker,
-                  'RuntimePackRuntimeIdentifiers="',
-              )
-
-          # ---------------------------------------------------------
-          # 2. KnownAppHostPack:
-          #    AppHostRuntimeIdentifiers += linux-x86
-          # ---------------------------------------------------------
-          start = 0
-          apphost_changed = False
-
-          while True:
-              start = text.find('<KnownAppHostPack', start)
-              if start == -1:
-                  break
-
-              end = text.find("/>", start)
+              marker = f'", start)
               if end == -1:
                   break
 
@@ -454,19 +418,7 @@ jobs:
               )
 
           path.write_text(text)
-          PY2
-
-          echo "===== Verify linux-x86 is now present in RuntimePackRuntimeIdentifiers ====="
-          grep -n \
-            'RuntimePackRuntimeIdentifiers=' \
-            "$SDK_PROPS" \
-            | grep 'linux-x86'
-
-          echo "===== Verify linux-x86 is now present in AppHostRuntimeIdentifiers ====="
-          grep -n \
-            'AppHostRuntimeIdentifiers=' \
-            "$SDK_PROPS" \
-            | grep 'linux-x86'
+PY2
 
           echo "==> Restoring linux-x86 with patched SDK $X86_SDK_VER from local feeds..."
           "/tmp/sdks/sdk-x86/dotnet" restore \
@@ -481,23 +433,6 @@ jobs:
             --force-evaluate \
             --ignore-failed-sources || echo "警告: linux-x86 restore 部分失败"
 
-          echo "===== Checking linux-x86 packages in NuGet cache ====="
-          find ./nuget-cache-arm -type d | grep -E 'linux-x86' || true
-
-          find ./nuget-cache-arm -type d \
-            -path '*/microsoft.aspnetcore.app.runtime.linux-x86/10.0.*' -print -quit | grep -q . \
-            || { echo "ERROR: Microsoft.AspNetCore.App.Runtime.linux-x86 not found in cache"; exit 1; }
-
-          find ./nuget-cache-arm -type d \
-            -path '*/microsoft.netcore.app.host.linux-x86/10.0.*' -print -quit | grep -q . \
-            || { echo "ERROR: Microsoft.NETCore.App.Host.linux-x86 not found in cache"; exit 1; }
-
-          find ./nuget-cache-arm -type d \
-            -path '*/microsoft.netcore.app.runtime.linux-x86/10.0.*' -print -quit | grep -q . \
-            || { echo "ERROR: Microsoft.NETCore.App.Runtime.linux-x86 not found in cache"; exit 1; }
-
-          echo "linux-x86 packages are present in cache."
-
       - name: Upload ARM64 runner cache artifact
         uses: actions/upload-artifact@v6
         with:
@@ -505,7 +440,7 @@ jobs:
           path: ./nuget-cache-arm/
 
   # =========================================================
-  # Job 3: 合并缓存 & 发布 Release
+  # Job 3: 提取 .nupkg 纯包源 & 压缩发布
   # =========================================================
   merge-and-release:
     needs: [build-x64-runner, build-arm64-runner]
@@ -518,37 +453,27 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Merge caches & deduplicate
+      - name: Merge caches & deduplicate (.nupkg only)
         run: |
           set -euo pipefail
 
           mkdir -p ./nuget-cache
 
-          echo "合并 x64-runner 产物 (arm64 缓存)..."
-          rsync -av \
-            ./artifacts/nuget-cache-x64-runner/ \
-            ./nuget-cache/
+          echo "提取全部 .nupkg 文件至 nuget-cache..."
+          find ./artifacts -type f -name "*.nupkg" ! -name "*.snupkg" -exec cp -f {} ./nuget-cache/ \;
 
-          echo "合并 arm64-runner 产物 (x64, riscv64, loongarch64, ppc64le, x86 缓存)..."
-          rsync -av \
-            ./artifacts/nuget-cache-arm64-runner/ \
-            ./nuget-cache/
-
-          find ./nuget-cache -name "*.lock" -delete
-          find ./nuget-cache -name "*.tmp" -delete
-
-          echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
+          echo "提取完成，.nupkg 包总数: $(ls -1 ./nuget-cache | wc -l)"
 
       - name: Compress NuGet cache
         run: |
-          XZ_OPT="-T0 --lzma2=preset=9e,dict=256MiB,lc=4,pb=0,depth=768" tar -cJf nuget-cache.tar.xz nuget-cache
+          XZ_OPT="-T0 --lzma2=preset=9e,dict=256MiB,lc=4,pb=0,depth=768" tar --sort=name -cJf nuget-cache.tar.xz nuget-cache
 
       - name: Create Release with cache
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${{ inputs.nuget_cache_version }}" --repo ${{ github.repository }} --yes || true
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}GitHub.com/${{ github.repository }}.git" \
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
             --delete "${{ inputs.nuget_cache_version }}" || true
 
           gh release create "${{ inputs.nuget_cache_version }}" \
