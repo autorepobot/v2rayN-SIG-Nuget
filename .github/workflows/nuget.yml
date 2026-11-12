@@ -539,6 +539,38 @@ jobs:
 
           echo "合并完成，顶级依赖包数量: $(ls -1 ./nuget-cache | wc -l)"
 
+      - name: Keep only .nupkg and .snupkg files
+        run: |
+          set -euo pipefail
+
+          mkdir -p nuget-cache-flat
+
+          while IFS= read -r -d '' package; do
+            filename="${package##*/}"
+            target="nuget-cache-flat/$filename"
+            if [[ -e "$target" ]]; then
+              cmp -s "$package" "$target" || {
+                echo "Conflicting NuGet package: $filename" >&2
+                exit 1
+              }
+            else
+              ln "$package" "$target"
+            fi
+          done < <(find nuget-cache -type f \( -iname '*.nupkg' -o -iname '*.snupkg' \) -print0)
+
+          count="$(find nuget-cache-flat -maxdepth 1 -type f | wc -l)"
+          (( count > 0 )) || { echo "No NuGet packages found" >&2; exit 1; }
+
+          rm -rf nuget-cache
+          mv nuget-cache-flat nuget-cache
+          echo "Retained $count NuGet package archives (.nupkg/.snupkg only)"
+
+      - name: Download Microsoft.NET.ILLink.Tasks 10.0.15
+        run: |
+          curl -fL --retry 3 \
+            https://api.nuget.org/v3-flatcontainer/microsoft.net.illink.tasks/10.0.15/microsoft.net.illink.tasks.10.0.15.nupkg \
+            -o nuget-cache/microsoft.net.illink.tasks.10.0.15.nupkg
+
       - name: Compress NuGet cache
         run: |
           XZ_OPT="-T0 --lzma2=preset=9e,dict=256MiB,lc=4,pb=0,depth=768" tar -cJf nuget-cache.tar.xz nuget-cache
